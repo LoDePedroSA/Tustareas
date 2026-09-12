@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#5b5bd6">
+  <meta name="description" content="TusTareas - Organizá las tareas de la casa y mirá qué te toca cada día.">
+
+  <title>TusTareas</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.svg">
+
+  <!-- Tipografías -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Fondo decorativo -->
+  <div class="bg-decor" aria-hidden="true">
+    <span class="blob blob-1"></span>
+    <span class="blob blob-2"></span>
+    <span class="blob blob-3"></span>
+  </div>
+
+  <!-- Encabezado -->
+  <header class="app-header">
+    <h1 class="logo">TusTareas</h1>
+    <p class="tagline">Las tareas de la casa, ordenadas</p>
+  </header>
+
+  <!-- Pestañas -->
+  <nav class="tabs" id="tabs" aria-label="Secciones">
+    <span class="tab-indicator" id="tab-indicator" aria-hidden="true"></span>
+    <button class="tab-btn active" data-tab="login" type="button">Iniciar sesión</button>
+    <button class="tab-btn" data-tab="inicio" type="button" disabled>Inicio</button>
+  </nav>
+
+  <main>
+
+    <!-- ================= PANEL LOGIN ================= -->
+    <section class="panel active" id="panel-login">
+      <div class="card login-card">
+        <h2 class="card-title">¿Quién sos?</h2>
+        <p class="card-sub">Escribí tu nombre de usuario para entrar</p>
+
+        <form id="login-form" novalidate autocomplete="off">
+          <label class="field-label" for="username">Usuario</label>
+          <input
+            type="text"
+            id="username"
+            name="username"
+            placeholder="Ej: Mía"
+            spellcheck="false"
+            autocapitalize="off"
+            autocomplete="off"
+          >
+          <p class="error" id="login-error" role="alert"></p>
+
+          <button type="submit" class="btn btn-primary" id="login-btn">
+            Entrar
+          </button>
+        </form>
+      </div>
+    </section>
+
+    <!-- ================= PANEL INICIO ================= -->
+    <section class="panel" id="panel-inicio">
+      <div class="card">
+
+        <div class="inicio-top">
+          <button class="btn btn-ghost" id="logout-btn" type="button">Cerrar sesión</button>
+          <span class="user-chip" id="user-chip">—</span>
+        </div>
+
+        <h2 class="card-title">Tabla de tareas</h2>
+        <p class="card-sub">Así se reparten las tareas de la semana</p>
+
+        <div class="table-wrap">
+          <table id="tareas-table"></table>
+        </div>
+
+        <div class="hoy" id="hoy-box">
+          <h3 id="hoy-titulo">Hoy te toca</h3>
+          <ul id="hoy-lista"></ul>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
