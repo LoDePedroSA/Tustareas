@@ -6,7 +6,6 @@
    1. DATOS
    ------------------------------------------------------------ */
 
-/* Número de tarea -> en qué consiste */
 const TAREAS = {
   1: 'Secar vidrios',
   2: 'Secar lo lavado',
@@ -20,7 +19,6 @@ const TAREAS = {
 
 const DIAS = ['LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES'];
 
-/* Día -> [Tarea 1, Tarea 2, ... Tarea 8] */
 const ASIGNACION = {
   LUNES:     ['Mía',       'Pedro',     'Pedro', 'Mía',   'Ayelen', 'Ayelen', 'Mía',   'Pedro'],
   MARTES:    ['Lucía',     'Lucía',     'Lucía', 'Lucía', 'Ayelen', 'Pedro',  'Ayelen','Mía'],
@@ -29,7 +27,6 @@ const ASIGNACION = {
   VIERNES:   ['Mía/Pedro', 'Pedro/Mía', 'Mía',   'Pedro', 'X',      'X',      'X',     'X']
 };
 
-/* Lista de usuarios válidos, generada automáticamente desde la tabla */
 const USUARIOS = [...new Set(
   DIAS
     .flatMap(dia => ASIGNACION[dia])
@@ -37,22 +34,63 @@ const USUARIOS = [...new Set(
     .flatMap(celda => celda.split('/'))
 )].sort((a, b) => a.localeCompare(b, 'es'));
 
+/* Usuario con acceso al panel admin */
+const USUARIO_ADMIN = 'Pedro';
+
 /* ------------------------------------------------------------
-   2. CONFIGURACIÓN
+   2. FIREBASE
+   ------------------------------------------------------------ */
+
+const firebaseConfig = {
+  apiKey: "AIzaSyC8jSaP8e1UvLDn2sDdIyo2Z9o_KNhSEro",
+  authDomain: "tuesa-oficial.firebaseapp.com",
+  projectId: "tuesa-oficial",
+  storageBucket: "tuesa-oficial.firebasestorage.app",
+  messagingSenderId: "447951557213",
+  appId: "1:447951557213:web:293e062ae3fe474c1cb3b4"
+};
+
+let _db = null;
+
+/**
+ * Inicializa Firebase (una sola vez) y devuelve la instancia de Firestore.
+ * Devuelve null si no se pudo inicializar.
+ */
+function obtenerDb() {
+  try {
+    if (typeof firebase === 'undefined') {
+      console.error('Firebase SDK no está cargado.');
+      return null;
+    }
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+    if (!_db) _db = firebase.firestore();
+    return _db;
+  } catch (e) {
+    console.error('No se pudo inicializar Firebase:', e);
+    return null;
+  }
+}
+
+/* ------------------------------------------------------------
+   3. CONFIGURACIÓN
    ------------------------------------------------------------ */
 
 const STORAGE_SESION = 'tustareas.sesion';
 const STORAGE_NOTIF  = 'tustareas.ultimaNotificacion';
 
-const HORA_NOTIFICACION = 20;          // 20 = 8 de la tarde (poné 8 para las 8 de la mañana)
-const REINTENTO_MS      = 2 * 60 * 1000; // 2 minutos
-const CHEQUEO_MS        = 30 * 1000;     // cada cuánto se revisa el reloj
+const HORA_NOTIFICACION = 20;
+const REINTENTO_MS      = 2 * 60 * 1000;
+const CHEQUEO_MS        = 30 * 1000;
+
+const COLECCION     = 'tustareas';
+const DOC_ULTIMA    = 'ultima_revision';
 
 /* ------------------------------------------------------------
-   3. UTILIDADES
+   4. UTILIDADES
    ------------------------------------------------------------ */
 
-/** Quita tildes, pasa a minúsculas y recorta espacios. */
 function normalizar(texto) {
   return String(texto)
     .normalize('NFD')
@@ -61,7 +99,6 @@ function normalizar(texto) {
     .trim();
 }
 
-/** Devuelve "2025-04-08" para la fecha indicada. */
 function claveFecha(fecha = new Date()) {
   const y = fecha.getFullYear();
   const m = String(fecha.getMonth() + 1).padStart(2, '0');
@@ -69,19 +106,16 @@ function claveFecha(fecha = new Date()) {
   return `${y}-${m}-${d}`;
 }
 
-/** Devuelve "LUNES", "MARTES", ... */
 function nombreDia(fecha = new Date()) {
-  return ['DOMINGO', 'LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES', 'SABADO'][fecha.getDay()];
+  return ['DOMINGO','LUNES','MARTES','MIERCOLES','JUEVES','VIERNES','SABADO'][fecha.getDay()];
 }
 
-/** Busca un usuario ignorando tildes y mayúsculas. Devuelve el nombre real o null. */
 function buscarUsuario(entrada) {
   const buscado = normalizar(entrada);
   if (!buscado) return null;
   return USUARIOS.find(u => normalizar(u) === buscado) || null;
 }
 
-/** Devuelve el array de tareas (nombres) que le tocan a un usuario en una fecha. */
 function tareasDeUsuario(usuario, fecha = new Date()) {
   const fila = ASIGNACION[nombreDia(fecha)];
   if (!fila) return [];
@@ -98,8 +132,12 @@ function tareasDeUsuario(usuario, fecha = new Date()) {
   return resultado;
 }
 
+function esAdmin(usuario) {
+  return normalizar(usuario) === normalizar(USUARIO_ADMIN);
+}
+
 /* ------------------------------------------------------------
-   4. SESIÓN (guardado local)
+   5. SESIÓN
    ------------------------------------------------------------ */
 
 function guardarSesion(usuario) {
@@ -117,11 +155,9 @@ function leerSesion() {
   try {
     const bruto = localStorage.getItem(STORAGE_SESION);
     if (!bruto) return null;
-
     const datos = JSON.parse(bruto);
     if (!datos || !datos.usuario) return null;
     if (!USUARIOS.includes(datos.usuario)) return null;
-
     return datos;
   } catch (e) {
     return null;
@@ -129,13 +165,11 @@ function leerSesion() {
 }
 
 function borrarSesion() {
-  try {
-    localStorage.removeItem(STORAGE_SESION);
-  } catch (e) { /* nada */ }
+  try { localStorage.removeItem(STORAGE_SESION); } catch (e) {}
 }
 
 /* ------------------------------------------------------------
-   5. REFERENCIAS DEL DOM
+   6. DOM
    ------------------------------------------------------------ */
 
 const tabsEl        = document.getElementById('tabs');
@@ -143,28 +177,34 @@ const botonesTab    = [...tabsEl.querySelectorAll('.tab-btn')];
 const indicador     = document.getElementById('tab-indicator');
 
 const paneles = {
-  login:  document.getElementById('panel-login'),
-  inicio: document.getElementById('panel-inicio')
+  login:         document.getElementById('panel-login'),
+  inicio:        document.getElementById('panel-inicio'),
+  'panel-admin': document.getElementById('panel-panel-admin')
 };
 
-const formLogin   = document.getElementById('login-form');
-const inputUsuario= document.getElementById('username');
-const errorLogin  = document.getElementById('login-error');
+const formLogin    = document.getElementById('login-form');
+const inputUsuario = document.getElementById('username');
+const errorLogin   = document.getElementById('login-error');
 
-const btnLogout   = document.getElementById('logout-btn');
-const userChip    = document.getElementById('user-chip');
-const tabla       = document.getElementById('tareas-table');
+const btnLogout    = document.getElementById('logout-btn');
+const userChip     = document.getElementById('user-chip');
+const tabla        = document.getElementById('tareas-table');
 
-const hoyTitulo   = document.getElementById('hoy-titulo');
-const hoyLista    = document.getElementById('hoy-lista');
+const hoyTitulo    = document.getElementById('hoy-titulo');
+const hoyLista     = document.getElementById('hoy-lista');
+
+const btnAdminRev  = document.getElementById('btn-solicitar-revision');
+const adminEstado  = document.getElementById('admin-estado');
+
+const toastContainer = document.getElementById('toast-container');
 
 /* ------------------------------------------------------------
-   6. PESTAÑAS
+   7. PESTAÑAS
    ------------------------------------------------------------ */
 
 function posicionarIndicador(animar = true) {
   const activo = tabsEl.querySelector('.tab-btn.active');
-  if (!activo) return;
+  if (!activo || activo.offsetParent === null) return; // si está oculto, no hacer nada
 
   const r = activo.getBoundingClientRect();
   const c = tabsEl.getBoundingClientRect();
@@ -176,7 +216,7 @@ function posicionarIndicador(animar = true) {
   indicador.style.transform = `translate(${r.left - c.left}px, ${r.top - c.top}px)`;
 
   if (!animar) {
-    void indicador.offsetWidth; // forzar reflow
+    void indicador.offsetWidth;
     requestAnimationFrame(() => { indicador.style.transition = ''; });
   }
 }
@@ -185,14 +225,15 @@ function activarTab(nombre, animar = true) {
   botonesTab.forEach(b => b.classList.toggle('active', b.dataset.tab === nombre));
 
   Object.entries(paneles).forEach(([clave, el]) => {
-    el.classList.toggle('active', clave === nombre);
+    if (el) el.classList.toggle('active', clave === nombre);
   });
 
-  posicionarIndicador(animar);
+  // Esperar al reflow por si cambió la visibilidad de algún botón
+  requestAnimationFrame(() => posicionarIndicador(animar));
 }
 
 /* ------------------------------------------------------------
-   7. RENDERIZADO
+   8. RENDERIZADO
    ------------------------------------------------------------ */
 
 function renderTabla(usuarioActual = null) {
@@ -204,17 +245,14 @@ function renderTabla(usuarioActual = null) {
 
   for (const dia of DIAS) {
     html += `<tr><th class="col-dia" scope="row">${dia}</th>`;
-
     for (const celda of ASIGNACION[dia]) {
       if (celda === 'X') {
         html += '<td class="celda-vacia">—</td>';
         continue;
       }
-
       const esMia = objetivo && celda.split('/').map(normalizar).includes(objetivo);
       html += `<td class="${esMia ? 'celda-mia' : ''}">${celda}</td>`;
     }
-
     html += '</tr>';
   }
 
@@ -248,7 +286,272 @@ function renderHoy(usuario) {
 }
 
 /* ------------------------------------------------------------
-   8. LOGIN / LOGOUT
+   9. PESTAÑA PANEL ADMIN
+   ------------------------------------------------------------ */
+
+function actualizarTabAdmin(usuario) {
+  const btnAdmin = botonesTab.find(b => b.dataset.tab === 'panel-admin');
+  if (!btnAdmin) return;
+
+  const mostrar = usuario && esAdmin(usuario);
+
+  if (mostrar) {
+    btnAdmin.classList.remove('hidden');
+    btnAdmin.disabled = false;
+  } else {
+    // Si estaba activa esta pestaña, volver a inicio antes de ocultarla
+    if (btnAdmin.classList.contains('active')) {
+      activarTab('inicio');
+    }
+    btnAdmin.classList.add('hidden');
+    btnAdmin.disabled = true;
+  }
+
+  // Reposicionar el indicador porque cambió el layout
+  requestAnimationFrame(() => posicionarIndicador());
+}
+
+/* ------------------------------------------------------------
+   10. TOASTS (notificaciones internas)
+   ------------------------------------------------------------ */
+
+function mostrarToast(titulo, cuerpo, duracion = 8000) {
+  if (!toastContainer) return;
+
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+
+  const h = document.createElement('p');
+  h.className = 'toast-title';
+  h.textContent = titulo;
+
+  const p = document.createElement('p');
+  p.className = 'toast-body';
+  p.textContent = cuerpo;
+
+  toast.appendChild(h);
+  toast.appendChild(p);
+  toastContainer.appendChild(toast);
+
+  // Click para cerrar
+  toast.addEventListener('click', () => {
+    toast.classList.add('removing');
+    setTimeout(() => toast.remove(), 300);
+  });
+
+  // Auto cierre
+  setTimeout(() => {
+    toast.classList.add('removing');
+    setTimeout(() => toast.remove(), 300);
+  }, duracion);
+}
+
+/* ------------------------------------------------------------
+   11. SONIDO
+   ------------------------------------------------------------ */
+
+let _audioPendiente = null;
+
+function reproducirSonidoNotificacion() {
+  try {
+    const audio = new Audio('notificacion.mp3');
+    audio.volume = 1;
+
+    const promesa = audio.play();
+    if (promesa && typeof promesa.catch === 'function') {
+      promesa.catch(() => {
+        // El navegador bloqueó el audio (autoplay). Lo guardamos y lo
+        // reintentamos al primer toque del usuario.
+        _audioPendiente = audio;
+        const reintentar = () => {
+          if (_audioPendiente) {
+            _audioPendiente.play().catch(() => {});
+            _audioPendiente = null;
+          }
+        };
+        document.addEventListener('click', reintentar, { once: true });
+        document.addEventListener('touchstart', reintentar, { once: true });
+      });
+    }
+  } catch (e) {
+    console.warn('No se pudo reproducir el sonido:', e);
+  }
+}
+
+/* ------------------------------------------------------------
+   12. NOTIFICACIONES DEL NAVEGADOR
+   ------------------------------------------------------------ */
+
+function permisoConcedido() {
+  return typeof Notification !== 'undefined' && Notification.permission === 'granted';
+}
+
+async function pedirPermisoNotificaciones() {
+  if (typeof Notification === 'undefined') return;
+  if (Notification.permission !== 'default') return;
+  try {
+    await Notification.requestPermission();
+  } catch (e) {
+    console.warn('No se pudo pedir permiso de notificaciones:', e);
+  }
+}
+
+/* ------------------------------------------------------------
+   13. REVISIÓN PENDIENTE (se ejecuta al iniciar sesión)
+   ------------------------------------------------------------ */
+
+async function revisionpendiente() {
+  const sesion = leerSesion();
+  if (!sesion) return;
+
+  const db = obtenerDb();
+  if (!db) {
+    console.warn('revisionpendiente: sin acceso a Firebase.');
+    return;
+  }
+
+  try {
+    // 1. Leer número de última revisión
+    const ultimaSnap = await db.collection(COLECCION).doc(DOC_ULTIMA).get();
+    if (!ultimaSnap.exists) return;
+
+    const numeroRev = ultimaSnap.data().revision;
+    if (numeroRev == null) return;
+
+    // 2. Buscar documento con ese número de revisión
+    const querySnap = await db.collection(COLECCION)
+      .where('revision', '==', numeroRev)
+      .get();
+
+    if (querySnap.empty) return;
+
+    // Excluir el documento "ultima_revision" por si tiene el mismo número
+    const docRev = querySnap.docs.find(d => d.id !== DOC_ULTIMA);
+    if (!docRev) return;
+
+    const data = docRev.data();
+
+    // 3. Buscar el campo que corresponda al usuario (sin tildes ni mayúsculas)
+    const usuarioNorm = normalizar(sesion.usuario);
+    let valor = undefined;
+
+    for (const [clave, val] of Object.entries(data)) {
+      if (normalizar(clave) === usuarioNorm) {
+        valor = val;
+        break;
+      }
+    }
+
+    // 4. Si está en false, notificar
+    if (valor === false) {
+      mostrarNotificacionRevision(numeroRev);
+    }
+    // Si está en true o no existe el campo, no pasa nada.
+
+  } catch (e) {
+    console.error('Error en revisionpendiente:', e);
+  }
+}
+
+function mostrarNotificacionRevision(numeroRev) {
+  const titulo = 'Prueba de Notificacion - Tus Tareas';
+  const cuerpo = `Esta es una prueba para comprobar que el sistema ande bien (revision "${numeroRev}")`;
+
+  // Sonido
+  reproducirSonidoNotificacion();
+
+  // Notificación del navegador
+  if (permisoConcedido()) {
+    navigator.serviceWorker.getRegistration()
+      .then(reg => {
+        const opciones = {
+          body: cuerpo,
+          icon: 'icon-192.png',
+          badge: 'icon-192.png',
+          tag: 'tustareas-revision-' + numeroRev,
+          requireInteraction: true
+        };
+        if (reg) return reg.showNotification(titulo, opciones);
+        return new Notification(titulo, opciones);
+      })
+      .catch(e => console.warn('No se pudo mostrar la notificación nativa:', e));
+  }
+
+  // Toast interno (siempre aparece, para asegurar visibilidad)
+  mostrarToast(titulo, cuerpo, 12000);
+}
+
+/* ------------------------------------------------------------
+   14. SOLICITAR REVISIÓN (panel admin)
+   ------------------------------------------------------------ */
+
+async function solicitarRevision() {
+  if (adminEstado) {
+    adminEstado.textContent = 'Contactando con el servidor...';
+    adminEstado.className = 'admin-estado';
+  }
+
+  const db = obtenerDb();
+  if (!db) {
+    if (adminEstado) {
+      adminEstado.textContent = 'No se pudo conectar con el servidor. Revisá tu conexión.';
+      adminEstado.className = 'admin-estado error';
+    }
+    alert('No se pudo conectar con el servidor. Revisá tu conexión.');
+    return;
+  }
+
+  try {
+    // 1. Leer última revisión
+    const ultimaSnap = await db.collection(COLECCION).doc(DOC_ULTIMA).get();
+    const revActual = ultimaSnap.exists ? (ultimaSnap.data().revision || 0) : 0;
+    const nuevaRev  = Number(revActual) + 1;
+
+    // 2. Crear nuevo documento de revisión
+    const nuevoDoc = {
+      fecha: firebase.firestore.FieldValue.serverTimestamp(),
+      revision: nuevaRev,
+      Mia: false,
+      Pedro: false,
+      Ayelen: false,
+      Lucia: false,
+      Alejandro: false
+    };
+
+    await db.collection(COLECCION).add(nuevoDoc);
+
+    // 3. Actualizar el puntero de última revisión.
+    // NOTA: esto no estaba explícito en las instrucciones, pero sin esta línea
+    // la app seguiría leyendo la revisión anterior y la nueva nunca se detectaría.
+    await db.collection(COLECCION).doc(DOC_ULTIMA).set(
+      { revision: nuevaRev },
+      { merge: true }
+    );
+
+    if (adminEstado) {
+      adminEstado.textContent = `Revisión ${nuevaRev} creada correctamente.`;
+      adminEstado.className = 'admin-estado ok';
+    }
+
+    // 4. Avisos
+    alert(`Se solicito una revision exitosamente, el numero de revision es: ${nuevaRev}`);
+    alert('En breve se le reiniciara la aplicacion...');
+
+    // 5. Recargar a los 5 segundos
+    setTimeout(() => location.reload(), 5000);
+
+  } catch (e) {
+    console.error('Error al solicitar revisión:', e);
+    if (adminEstado) {
+      adminEstado.textContent = 'Error al solicitar la revisión: ' + (e.message || e);
+      adminEstado.className = 'admin-estado error';
+    }
+    alert('Hubo un error al solicitar la revisión. Revisá la consola para más detalles.');
+  }
+}
+
+/* ------------------------------------------------------------
+   15. LOGIN / LOGOUT
    ------------------------------------------------------------ */
 
 function mostrarError(mensaje) {
@@ -269,17 +572,26 @@ function iniciarSesion(usuario) {
   renderTabla(usuario);
   renderHoy(usuario);
 
-  // Habilitar "Inicio" y bloquear "Login"
-  botonesTab.find(b => b.dataset.tab === 'inicio').disabled = false;
-  botonesTab.find(b => b.dataset.tab === 'login').disabled  = true;
+  // Pestaña inicio habilitada, login bloqueado
+  const btnInicio = botonesTab.find(b => b.dataset.tab === 'inicio');
+  const btnLogin  = botonesTab.find(b => b.dataset.tab === 'login');
+  if (btnInicio) btnInicio.disabled = false;
+  if (btnLogin)  btnLogin.disabled  = true;
 
+  // Mostrar/ocultar panel admin
+  actualizarTabAdmin(usuario);
+
+  // Ir a inicio
   activarTab('inicio');
 
-  // Pedir permiso de notificaciones (aprovechando el gesto del usuario)
+  // Pedir permiso de notificaciones
   pedirPermisoNotificaciones();
 
-  // Revisar si quedó alguna notificación pendiente de hoy
+  // Revisar notificación diaria pendiente
   revisarNotificaciones();
+
+  // Revisar si hay una revisión pendiente para este usuario
+  revisionpendiente();
 }
 
 function cerrarSesion() {
@@ -289,8 +601,13 @@ function cerrarSesion() {
   renderTabla(null);
   renderHoy(null);
 
-  botonesTab.find(b => b.dataset.tab === 'inicio').disabled = true;
-  botonesTab.find(b => b.dataset.tab === 'login').disabled  = false;
+  // Ocultar panel admin
+  actualizarTabAdmin(null);
+
+  const btnInicio = botonesTab.find(b => b.dataset.tab === 'inicio');
+  const btnLogin  = botonesTab.find(b => b.dataset.tab === 'login');
+  if (btnInicio) btnInicio.disabled = true;
+  if (btnLogin)  btnLogin.disabled  = false;
 
   inputUsuario.value = '';
   ocultarError();
@@ -304,50 +621,30 @@ function manejarLogin(evento) {
 
   const valor = inputUsuario.value.trim();
 
-  /* 2.1 — Campo vacío */
   if (!valor) {
     mostrarError('Escribí tu nombre de usuario para continuar.');
     inputUsuario.focus();
     return;
   }
 
-  /* 2.2 — Buscar en la tabla de usuarios (sin tildes ni mayúsculas) */
   const usuario = buscarUsuario(valor);
 
-  /* 3 — No se encontró */
   if (!usuario) {
     mostrarError(`No encontramos a "${valor}". Probá con Mía, Pedro, Ayelen o Lucía.`);
     return;
   }
 
-  /* 4 — Se encontró: guardar y entrar */
   ocultarError();
   guardarSesion(usuario);
   iniciarSesion(usuario);
 }
 
 /* ------------------------------------------------------------
-   9. NOTIFICACIONES DIARIAS
+   16. NOTIFICACIONES DIARIAS (tareas)
    ------------------------------------------------------------ */
 
 let reintentarDesde = 0;
 
-function permisoConcedido() {
-  return typeof Notification !== 'undefined' && Notification.permission === 'granted';
-}
-
-async function pedirPermisoNotificaciones() {
-  if (typeof Notification === 'undefined') return;
-  if (Notification.permission !== 'default') return;
-
-  try {
-    await Notification.requestPermission();
-  } catch (e) {
-    console.warn('No se pudo pedir permiso de notificaciones:', e);
-  }
-}
-
-/** Clave única por día + usuario (para no repetir la notificación). */
 function claveNotificacion(fecha = new Date()) {
   const sesion = leerSesion();
   const usuario = sesion ? normalizar(sesion.usuario) : 'anonimo';
@@ -366,8 +663,8 @@ async function enviarNotificacion(clave) {
 
   const opciones = {
     body: cuerpo,
-    icon: 'icon.svg',
-    badge: 'icon.svg',
+    icon: 'icon-192.png',
+    badge: 'icon-192.png',
     tag: `tustareas-${clave}`,
     renotify: false
   };
@@ -375,18 +672,14 @@ async function enviarNotificacion(clave) {
   try {
     if ('serviceWorker' in navigator) {
       const registro = await navigator.serviceWorker.getRegistration();
-      if (registro) {
-        await registro.showNotification('TusTareas', opciones);
-      } else {
-        new Notification('TusTareas', opciones);
-      }
+      if (registro) await registro.showNotification('TusTareas', opciones);
+      else new Notification('TusTareas', opciones);
     } else {
       new Notification('TusTareas', opciones);
     }
 
     localStorage.setItem(STORAGE_NOTIF, clave);
     return true;
-
   } catch (e) {
     console.warn('No se pudo mostrar la notificación:', e);
     return false;
@@ -400,18 +693,11 @@ function revisarNotificaciones() {
   const ahora = new Date();
   const diaSemana = ahora.getDay();
 
-  // Solo de lunes (1) a viernes (5)
   if (diaSemana === 0 || diaSemana === 6) return;
-
-  // Todavía no llegó la hora
   if (ahora.getHours() < HORA_NOTIFICACION) return;
 
   const clave = claveNotificacion(ahora);
-
-  // Ya se envió hoy para este usuario
   if (localStorage.getItem(STORAGE_NOTIF) === clave) return;
-
-  // Estamos esperando el próximo reintento
   if (Date.now() < reintentarDesde) return;
 
   enviarNotificacion(clave).then(ok => {
@@ -426,19 +712,17 @@ function iniciarSistemaNotificaciones() {
   revisarNotificaciones();
   setInterval(revisarNotificaciones, CHEQUEO_MS);
 
-  // Al volver a la app, revisar de nuevo
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) revisarNotificaciones();
   });
 }
 
 /* ------------------------------------------------------------
-   10. SERVICE WORKER (para poder instalar la app)
+   17. SERVICE WORKER
    ------------------------------------------------------------ */
 
 function registrarServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
-
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js').catch(err => {
       console.warn('No se pudo registrar el Service Worker:', err);
@@ -447,7 +731,7 @@ function registrarServiceWorker() {
 }
 
 /* ------------------------------------------------------------
-   11. INICIALIZACIÓN
+   18. INICIALIZACIÓN
    ------------------------------------------------------------ */
 
 function init() {
@@ -457,12 +741,14 @@ function init() {
   formLogin.addEventListener('submit', manejarLogin);
   btnLogout.addEventListener('click', cerrarSesion);
 
-  // Al escribir, sacar el estado de error
+  if (btnAdminRev) {
+    btnAdminRev.addEventListener('click', solicitarRevision);
+  }
+
   inputUsuario.addEventListener('input', () => {
     if (errorLogin.classList.contains('show')) ocultarError();
   });
 
-  // Permitir click en las pestañas
   botonesTab.forEach(boton => {
     boton.addEventListener('click', () => {
       if (boton.disabled) return;
@@ -470,7 +756,6 @@ function init() {
     });
   });
 
-  // Reposicionar el indicador
   window.addEventListener('resize', () => posicionarIndicador(false));
   if (document.fonts && document.fonts.ready) {
     document.fonts.ready.then(() => posicionarIndicador(false));
@@ -480,10 +765,8 @@ function init() {
   const sesion = leerSesion();
 
   if (sesion) {
-    // 1.2 — Hay datos guardados: ir directo a "inicio"
     iniciarSesion(sesion.usuario);
   } else {
-    // 1.1 — No hay datos: dejar que el usuario se loguee
     activarTab('login', false);
     setTimeout(() => inputUsuario.focus(), 250);
   }

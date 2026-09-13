@@ -1,0 +1,68 @@
+Muy bien, ya me dejo instalar la aplicacion ahora quiero hacer estos cambios:
+1- Cuando se logee "Pedro", ademas de cargar la pestaña de inicio, que al lado del boton de la pestaña de inicio, se le ponga un boton que se llame panel admin.
+
+2- Configuracion de la pestaña: "panel-admin":
+"
+Boton:{
+    Texto: "Solicitar revision"
+    Funcion: "solicitarRevision()"
+}
+"
+
+3- Cada vez que el usuario se loguee (autologin o manual) en la aplicacion, que se ejecute la funcion: "revisionpendiente()".
+
+4- Configuracion de la funcion: "revisionpendiente()":
+1.1. Se verifica el acceso a:
+const firebaseConfig = {
+    apiKey: "AIzaSyC8jSaP8e1UvLDn2sDdIyo2Z9o_KNhSEro",
+    authDomain: "tuesa-oficial.firebaseapp.com",
+    projectId: "tuesa-oficial",
+    storageBucket: "tuesa-oficial.firebasestorage.app",
+    messagingSenderId: "447951557213",
+    appId: "1:447951557213:web:293e062ae3fe474c1cb3b4"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+1.2. Si no hay acceso se marca error.
+1.3. Si hay acceso se sigue.
+2. Se busca el numero en: "Base de Datos > tustareas > ultima_revision > revision".
+3. Se busca un documento con el mismo numero que "ultima_revision" en el campo "revision" en la carpeta: "tustareas".
+4.1. Una vez encontrado, en ese mismo documento se fijara si el nombre de usuario se encuentra en "false".
+4.2. Si se encuentra en true, no pasara nada.
+4.3. Si se encuentra el "false", se mandara una notificacion con el sonido: "notificacion.mp3" y el siguiente contenido:
+"
+Titulo: "Prueba de Notificacion - Tus Tareas"
+Descripcion: "Esta es una prueba para comprobar que el sistema ande bien (revision "[ultima_revision]")"
+"
+¿Como que "se fijara si el nombre de usuario se encuentra en "false"."?
+En cada documento de revision hay un campo con el nombre de cada cuenta. Entonces ahi se debera fijar que hay (false/true) en el campo que se llama el nombre del usuario.
+
+5- Configuracion de la funcion: "solicitarRevision()":
+1.1. Se verifica el acceso a:
+const firebaseConfig = {
+    apiKey: "AIzaSyC8jSaP8e1UvLDn2sDdIyo2Z9o_KNhSEro",
+    authDomain: "tuesa-oficial.firebaseapp.com",
+    projectId: "tuesa-oficial",
+    storageBucket: "tuesa-oficial.firebasestorage.app",
+    messagingSenderId: "447951557213",
+    appId: "1:447951557213:web:293e062ae3fe474c1cb3b4"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+1.2. Si no hay acceso se marca error.
+1.3. Si hay acceso se sigue.
+2. Se busca el numero en: "Base de Datos > tustareas > ultima_revision > revision".
+3. Se completa el siguiente formato: 
+"
+fecha (timestamp): [fecha y hora de ahora]
+revision: ["Base de Datos > tustareas > ultima_revision > revision" + 1]
+Mia: false
+Pedro: false
+Ayelen: false
+Lucia: false
+Alejandro: false
+"
+4. Una vez completado el formato, que se cree un nuevo documento con la ID aleatoria en: "Base de Datos > tustareas >"
+5. Sale un alert: "Se solicito una revision exitosamente, el numero de revision es: "("Base de Datos > tustareas > [documento recien creado] > revision").
+6. Sale un alert: "En breve se le reiniciara la aplicacion..."
+7. Se esperan 5 segundos y se reinicia la aplicacion (es decir, que se recarga (F5)).
