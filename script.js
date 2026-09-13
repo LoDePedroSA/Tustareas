@@ -1,11 +1,3 @@
-/* ============================================================
-   TusTareas — Lógica de la aplicación
-   ============================================================ */
-
-/* ------------------------------------------------------------
-   1. DATOS
-   ------------------------------------------------------------ */
-
 const TAREAS = {
   1: 'Secar vidrios',
   2: 'Secar lo lavado',
@@ -19,7 +11,8 @@ const TAREAS = {
 
 const DIAS = ['LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES'];
 
-/* [NUEVO] Valores por defecto: se usan si Firestore no responde o está vacío */
+const PERSONAS = ['Mía', 'Pedro', 'Ayelen', 'Lucía'];
+
 const ASIGNACION_DEFAULT = {
   LUNES:     ['Mía',       'Pedro',     'Pedro', 'Mía',   'Ayelen', 'Ayelen', 'Mía',   'Pedro'],
   MARTES:    ['Lucía',     'Lucía',     'Lucía', 'Lucía', 'Ayelen', 'Pedro',  'Ayelen','Mía'],
@@ -28,10 +21,7 @@ const ASIGNACION_DEFAULT = {
   VIERNES:   ['Mía/Pedro', 'Pedro/Mía', 'Mía',   'Pedro', 'X',      'X',      'X',     'X']
 };
 
-/* [NUEVO] Ahora es mutable: se reemplaza con lo que venga de Firestore */
 let ASIGNACION = JSON.parse(JSON.stringify(ASIGNACION_DEFAULT));
-
-/* [NUEVO] Lista de usuarios válidos (se recalcula al cargar la asignación) */
 let USUARIOS = [];
 
 function recalcularUsuarios() {
@@ -43,15 +33,12 @@ function recalcularUsuarios() {
       }
     });
   });
+  PERSONAS.forEach(p => set.add(p));
   USUARIOS = [...set].sort((a, b) => a.localeCompare(b, 'es'));
 }
 recalcularUsuarios();
 
 const USUARIO_ADMIN = 'Pedro';
-
-/* ------------------------------------------------------------
-   2. FIREBASE
-   ------------------------------------------------------------ */
 
 const firebaseConfig = {
   apiKey: "AIzaSyC8jSaP8e1UvLDn2sDdIyo2Z9o_KNhSEro",
@@ -79,17 +66,13 @@ function obtenerDb() {
   }
 }
 
-/* [NUEVO] Carga la asignación desde Firestore. Devuelve true si encontró datos. */
 async function cargarAsignacionDesdeFirestore() {
   const db = obtenerDb();
   if (!db) return false;
 
   try {
     const snap = await db.collection('dias').get();
-    if (snap.empty) {
-      console.info('[dias] La colección está vacía, usando valores por defecto.');
-      return false;
-    }
+    if (snap.empty) return false;
 
     const nueva = {};
     snap.forEach(doc => {
@@ -105,32 +88,22 @@ async function cargarAsignacionDesdeFirestore() {
     });
 
     recalcularUsuarios();
-    console.info(`[dias] Cargados ${encontrados}/5 días desde Firestore.`);
     return encontrados > 0;
-
   } catch (e) {
     console.warn('[dias] Error al cargar desde Firestore:', e);
     return false;
   }
 }
 
-/* ------------------------------------------------------------
-   3. CONFIGURACIÓN
-   ------------------------------------------------------------ */
-
 const STORAGE_SESION = 'tustareas.sesion';
 const STORAGE_NOTIF  = 'tustareas.ultimaNotificacion';
 
-const HORA_NOTIFICACION = 20;
-const REINTENTO_MS      = 2 * 60 * 1000;
-const CHEQUEO_MS        = 30 * 1000;
+const HORA_NOTIF_DEFAULT = '20:00';
+const REINTENTO_MS       = 2 * 60 * 1000;
+const CHEQUEO_MS         = 30 * 1000;
 
 const COLECCION  = 'tustareas';
 const DOC_ULTIMA = 'ultima_revision';
-
-/* ------------------------------------------------------------
-   4. UTILIDADES
-   ------------------------------------------------------------ */
 
 function normalizar(texto) {
   return String(texto)
@@ -174,9 +147,13 @@ function esAdmin(usuario) {
   return normalizar(usuario) === normalizar(USUARIO_ADMIN);
 }
 
-/* ------------------------------------------------------------
-   5. SESIÓN
-   ------------------------------------------------------------ */
+function construirMensajeTareas(usuario, fecha = new Date()) {
+  const tareas = tareasDeUsuario(usuario, fecha);
+  if (tareas.length === 0) {
+    return `Buenos dias ${usuario}, hoy no te toca ninguna tarea`;
+  }
+  return `Buenos dias ${usuario}, hoy te tocan estas tareas: ${tareas.join(', ')}`;
+}
 
 function guardarSesion(usuario) {
   try {
@@ -202,12 +179,29 @@ function borrarSesion() {
   try { localStorage.removeItem(STORAGE_SESION); } catch (e) {}
 }
 
-/* ------------------------------------------------------------
-   6. DOM
-   ------------------------------------------------------------ */
+function claveHora(usuario) {
+  return `tustareas.horaNotificacion.${normalizar(usuario)}`;
+}
+
+function obtenerHoraNotificacion(usuario) {
+  if (!usuario) {
+    const [h, m] = HORA_NOTIF_DEFAULT.split(':').map(Number);
+    return { hora: h, minuto: m, texto: HORA_NOTIF_DEFAULT };
+  }
+  const guardada = localStorage.getItem(claveHora(usuario));
+  const valor = guardada || HORA_NOTIF_DEFAULT;
+  const [h, m] = valor.split(':').map(Number);
+  return { hora: h, minuto: m, texto: valor };
+}
+
+function guardarHoraNotificacion(usuario, textoHHMM) {
+  try {
+    localStorage.setItem(claveHora(usuario), textoHHMM);
+  } catch (e) { console.warn('No se pudo guardar la hora:', e); }
+}
 
 const tabsEl        = document.getElementById('tabs');
-const botonesTab    = [...tabsEl.querySelectorAll('.tab-btn')];
+const botonesTab    = tabsEl ? [...tabsEl.querySelectorAll('.tab-btn')] : [];
 const indicador     = document.getElementById('tab-indicator');
 
 const paneles = {
@@ -227,6 +221,9 @@ const tabla        = document.getElementById('tareas-table');
 const hoyTitulo    = document.getElementById('hoy-titulo');
 const hoyLista     = document.getElementById('hoy-lista');
 
+const btnRecordarTareas  = document.getElementById('btn-recordar-tareas');
+const btnReprogNotif     = document.getElementById('btn-reprogramar-notif');
+
 const btnAdminRev  = document.getElementById('btn-solicitar-revision');
 const adminEstado  = document.getElementById('admin-estado');
 
@@ -234,13 +231,85 @@ const editorTbody      = document.getElementById('editor-tbody');
 const btnGuardarAsig   = document.getElementById('btn-guardar-asignacion');
 const editorEstado     = document.getElementById('editor-estado');
 
-const toastContainer = document.getElementById('toast-container');
+const modalHora        = document.getElementById('modal-hora');
+const modalHoraInput   = document.getElementById('hora-input');
+const modalCancelar    = document.getElementById('modal-cancelar');
+const modalGuardar     = document.getElementById('modal-guardar');
 
-/* ------------------------------------------------------------
-   7. PESTAÑAS
-   ------------------------------------------------------------ */
+const toastContainer   = document.getElementById('toast-container');
+
+const modoInstalar     = document.getElementById('modo-instalar');
+const appContenido     = document.getElementById('app-contenido');
+const btnInstalar      = document.getElementById('btn-instalar');
+const instalarEstado   = document.getElementById('instalar-estado');
+
+let eventoInstalacion = null;
+
+function estaEnModoInstalar() {
+  try {
+    const search = window.location.search || '';
+    const hash   = window.location.hash   || '';
+    return /[?&]=?instalar\b/i.test(search) || /instalar\b/i.test(hash);
+  } catch (e) {
+    return false;
+  }
+}
+
+function activarModoInstalar() {
+  if (appContenido) appContenido.style.display = 'none';
+  if (modoInstalar) modoInstalar.hidden = false;
+  document.body.classList.add('modo-instalar-activo');
+}
+
+function actualizarBotonInstalar() {
+  if (!btnInstalar || !instalarEstado) return;
+  if (eventoInstalacion) {
+    btnInstalar.disabled = false;
+    btnInstalar.textContent = 'Instalar app';
+    instalarEstado.textContent = '';
+  } else {
+    btnInstalar.disabled = false;
+    btnInstalar.textContent = 'Instalar app';
+    instalarEstado.textContent = 'Si no aparece el aviso, tocá el botón nuevamente o usá el menú del navegador.';
+  }
+}
+
+async function intentarInstalar() {
+  if (!instalarEstado) return;
+  if (eventoInstalacion) {
+    try {
+      eventoInstalacion.prompt();
+      const eleccion = await eventoInstalacion.userChoice;
+      if (eleccion && eleccion.outcome === 'accepted') {
+        instalarEstado.textContent = '¡Gracias! La app se está instalando.';
+      } else {
+        instalarEstado.textContent = 'Instalación cancelada.';
+      }
+    } catch (e) {
+      instalarEstado.textContent = 'No se pudo iniciar la instalación.';
+    } finally {
+      eventoInstalacion = null;
+      actualizarBotonInstalar();
+    }
+    return;
+  }
+
+  instalarEstado.textContent = 'Tu navegador no ofreció el aviso todavía. Esperá un momento y volvé a intentar.';
+}
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  eventoInstalacion = e;
+  actualizarBotonInstalar();
+});
+
+window.addEventListener('appinstalled', () => {
+  eventoInstalacion = null;
+  if (instalarEstado) instalarEstado.textContent = 'App instalada correctamente.';
+});
 
 function posicionarIndicador(animar = true) {
+  if (!tabsEl || !indicador) return;
   const activo = tabsEl.querySelector('.tab-btn.active');
   if (!activo || activo.offsetParent === null) return;
 
@@ -269,11 +338,8 @@ function activarTab(nombre, animar = true) {
   });
 }
 
-/* ------------------------------------------------------------
-   8. RENDERIZADO
-   ------------------------------------------------------------ */
-
 function renderTabla(usuarioActual = null) {
+  if (!tabla) return;
   const objetivo = usuarioActual ? normalizar(usuarioActual) : null;
 
   let html = '<thead><tr><th class="col-dia">DÍA</th>';
@@ -294,6 +360,7 @@ function renderTabla(usuarioActual = null) {
 }
 
 function renderHoy(usuario) {
+  if (!hoyLista || !hoyTitulo) return;
   hoyLista.innerHTML = '';
   if (!usuario) {
     hoyTitulo.textContent = 'Hoy te toca';
@@ -314,14 +381,21 @@ function renderHoy(usuario) {
   });
 }
 
-/* ------------------------------------------------------------
-   9. EDITOR DE ASIGNACIÓN
-   ------------------------------------------------------------ */
+function generarOpcionesEditor() {
+  const opciones = ['X', ...PERSONAS];
+  for (let i = 0; i < PERSONAS.length; i++) {
+    for (let j = 0; j < PERSONAS.length; j++) {
+      if (i !== j) opciones.push(`${PERSONAS[i]}/${PERSONAS[j]}`);
+    }
+  }
+  return opciones;
+}
 
 function renderEditorAsignacion() {
   if (!editorTbody) return;
-
   editorTbody.innerHTML = '';
+
+  const opciones = generarOpcionesEditor();
 
   DIAS.forEach(dia => {
     const tr = document.createElement('tr');
@@ -334,25 +408,34 @@ function renderEditorAsignacion() {
 
     for (let i = 0; i < 8; i++) {
       const td = document.createElement('td');
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.value = ASIGNACION[dia][i] || '';
-      input.dataset.dia = dia;
-      input.dataset.idx = i;
-      input.setAttribute('list', 'personas-datalist');
-      input.spellcheck = false;
-      input.autocomplete = 'off';
+      const sel = document.createElement('select');
+      sel.className = 'editor-select';
+      sel.dataset.dia = dia;
+      sel.dataset.idx = i;
+
+      const valorActual = ASIGNACION[dia][i] || 'X';
+      const listaFinal = opciones.includes(valorActual)
+        ? opciones
+        : [...opciones, valorActual];
+
+      listaFinal.forEach(opt => {
+        const o = document.createElement('option');
+        o.value = opt;
+        o.textContent = opt === 'X' ? '—' : opt;
+        sel.appendChild(o);
+      });
+
+      sel.value = valorActual;
 
       const pintar = () => {
-        input.classList.remove('input-x', 'input-combo');
-        const v = input.value.trim();
-        if (v === 'X' || v === '') input.classList.add('input-x');
-        else if (v.includes('/')) input.classList.add('input-combo');
+        sel.classList.remove('opcion-x', 'opcion-combo');
+        if (sel.value === 'X') sel.classList.add('opcion-x');
+        else if (sel.value.includes('/')) sel.classList.add('opcion-combo');
       };
       pintar();
-      input.addEventListener('input', pintar);
+      sel.addEventListener('change', pintar);
 
-      td.appendChild(input);
+      td.appendChild(sel);
       tr.appendChild(td);
     }
 
@@ -363,23 +446,14 @@ function renderEditorAsignacion() {
 async function guardarAsignacion() {
   if (!btnGuardarAsig || !editorEstado) return;
 
-  const inputs = editorTbody.querySelectorAll('input');
+  const selects = editorTbody.querySelectorAll('select.editor-select');
   const nueva = { LUNES: [], MARTES: [], MIERCOLES: [], JUEVES: [], VIERNES: [] };
 
-  let valido = true;
-  inputs.forEach(inp => {
-    const dia = inp.dataset.dia;
-    const idx = Number(inp.dataset.idx);
-    const v = inp.value.trim();
-    if (!v) valido = false;
-    nueva[dia][idx] = v || 'X';
+  selects.forEach(sel => {
+    const dia = sel.dataset.dia;
+    const idx = Number(sel.dataset.idx);
+    nueva[dia][idx] = sel.value || 'X';
   });
-
-  if (!valido) {
-    editorEstado.textContent = 'Hay celdas vacías. Completalas con un nombre o "X".';
-    editorEstado.className = 'admin-estado error';
-    return;
-  }
 
   const db = obtenerDb();
   if (!db) {
@@ -400,11 +474,9 @@ async function guardarAsignacion() {
     });
     await batch.commit();
 
-    // Actualizar el estado local
     DIAS.forEach(dia => { ASIGNACION[dia] = nueva[dia]; });
     recalcularUsuarios();
 
-    // Volver a renderizar la tabla con los datos nuevos
     const sesion = leerSesion();
     renderTabla(sesion ? sesion.usuario : null);
     renderHoy(sesion ? sesion.usuario : null);
@@ -412,9 +484,7 @@ async function guardarAsignacion() {
     editorEstado.textContent = 'Cambios guardados correctamente.';
     editorEstado.className = 'admin-estado ok';
 
-    // Sincronizar los inputs (por si se normalizó algún valor)
     renderEditorAsignacion();
-
   } catch (e) {
     console.error('Error al guardar asignación:', e);
     editorEstado.textContent = 'Error: ' + (e.message || e);
@@ -423,10 +493,6 @@ async function guardarAsignacion() {
     btnGuardarAsig.disabled = false;
   }
 }
-
-/* ------------------------------------------------------------
-   10. PESTAÑA PANEL ADMIN
-   ------------------------------------------------------------ */
 
 function actualizarTabAdmin(usuario) {
   const btnAdmin = botonesTab.find(b => b.dataset.tab === 'panel-admin');
@@ -445,10 +511,6 @@ function actualizarTabAdmin(usuario) {
 
   setTimeout(() => posicionarIndicador(), 60);
 }
-
-/* ------------------------------------------------------------
-   11. TOASTS
-   ------------------------------------------------------------ */
 
 function mostrarToast(titulo, cuerpo, duracion = 8000) {
   if (!toastContainer) return;
@@ -477,10 +539,6 @@ function mostrarToast(titulo, cuerpo, duracion = 8000) {
     setTimeout(() => toast.remove(), 300);
   }, duracion);
 }
-
-/* ------------------------------------------------------------
-   12. AUDIO
-   ------------------------------------------------------------ */
 
 let _audioPendiente = null;
 
@@ -516,10 +574,6 @@ function desbloquearAudio() {
   } catch (e) {}
 }
 
-/* ------------------------------------------------------------
-   13. PERMISO DE NOTIFICACIONES
-   ------------------------------------------------------------ */
-
 function permisoConcedido() {
   return typeof Notification !== 'undefined' && Notification.permission === 'granted';
 }
@@ -531,14 +585,8 @@ async function pedirPermisoNotificaciones() {
   try {
     const resultado = await Notification.requestPermission();
     return resultado === 'granted';
-  } catch (e) {
-    return false;
-  }
+  } catch (e) { return false; }
 }
-
-/* ------------------------------------------------------------
-   14. SERVICE WORKER READY
-   ------------------------------------------------------------ */
 
 async function esperarServiceWorker(timeoutMs = 6000) {
   if (!('serviceWorker' in navigator)) return null;
@@ -557,9 +605,29 @@ async function esperarServiceWorker(timeoutMs = 6000) {
   });
 }
 
-/* ------------------------------------------------------------
-   15. REVISIÓN PENDIENTE
-   ------------------------------------------------------------ */
+async function mostrarNotificacionNativa(titulo, cuerpo, tag) {
+  if (!permisoConcedido()) {
+    const concedido = await pedirPermisoNotificaciones();
+    if (!concedido) return false;
+  }
+
+  const reg = await esperarServiceWorker();
+  const opciones = {
+    body: cuerpo,
+    icon: 'icon-192.png',
+    badge: 'icon-192.png',
+    tag: tag || 'tustareas-generico'
+  };
+
+  try {
+    if (reg) await reg.showNotification(titulo, opciones);
+    else new Notification(titulo, opciones);
+    return true;
+  } catch (e) {
+    console.warn('No se pudo mostrar la notificación nativa:', e);
+    return false;
+  }
+}
 
 async function revisionpendiente() {
   const sesion = leerSesion();
@@ -602,28 +670,52 @@ async function mostrarNotificacionRevision(numeroRev) {
 
   reproducirSonidoNotificacion();
   mostrarToast(titulo, cuerpo, 12000);
-
-  if (!permisoConcedido()) return;
-
-  const reg = await esperarServiceWorker();
-  try {
-    const opciones = {
-      body: cuerpo,
-      icon: 'icon-192.png',
-      badge: 'icon-192.png',
-      tag: 'tustareas-revision-' + numeroRev,
-      requireInteraction: true
-    };
-    if (reg) await reg.showNotification(titulo, opciones);
-    else new Notification(titulo, opciones);
-  } catch (e) {
-    console.error('No se pudo mostrar la notificación nativa:', e);
-  }
+  await mostrarNotificacionNativa(titulo, cuerpo, 'tustareas-revision-' + numeroRev);
 }
 
-/* ------------------------------------------------------------
-   16. SOLICITAR REVISIÓN
-   ------------------------------------------------------------ */
+async function notificarMisTareas() {
+  const sesion = leerSesion();
+  if (!sesion) return;
+
+  const usuario = sesion.usuario;
+  const cuerpo = construirMensajeTareas(usuario);
+
+  reproducirSonidoNotificacion();
+  mostrarToast('TusTareas', cuerpo, 10000);
+  await mostrarNotificacionNativa('TusTareas', cuerpo, 'tustareas-manual-' + Date.now());
+}
+
+function abrirModalHora() {
+  const sesion = leerSesion();
+  if (!sesion || !modalHora) return;
+
+  const { texto } = obtenerHoraNotificacion(sesion.usuario);
+  modalHoraInput.value = texto;
+  modalHora.hidden = false;
+  setTimeout(() => modalHoraInput.focus(), 100);
+}
+
+function cerrarModalHora() {
+  if (!modalHora) return;
+  modalHora.hidden = true;
+}
+
+function guardarHoraSeleccionada() {
+  const sesion = leerSesion();
+  if (!sesion) { cerrarModalHora(); return; }
+
+  const valor = (modalHoraInput.value || '').trim();
+  if (!/^\d{2}:\d{2}$/.test(valor)) {
+    alert('Elegí una hora válida.');
+    return;
+  }
+
+  guardarHoraNotificacion(sesion.usuario, valor);
+  cerrarModalHora();
+  mostrarToast('TusTareas', `Listo. Vas a recibir tu recordatorio diario a las ${valor}.`);
+
+  revisarNotificaciones();
+}
 
 async function solicitarRevision() {
   if (adminEstado) {
@@ -679,24 +771,22 @@ async function solicitarRevision() {
   }
 }
 
-/* ------------------------------------------------------------
-   17. LOGIN / LOGOUT
-   ------------------------------------------------------------ */
-
 function mostrarError(mensaje) {
+  if (!errorLogin || !inputUsuario) return;
   errorLogin.textContent = mensaje;
   errorLogin.classList.add('show');
   inputUsuario.classList.add('input-error');
 }
 
 function ocultarError() {
+  if (!errorLogin || !inputUsuario) return;
   errorLogin.textContent = '';
   errorLogin.classList.remove('show');
   inputUsuario.classList.remove('input-error');
 }
 
 function iniciarSesion(usuario) {
-  userChip.textContent = usuario;
+  if (userChip) userChip.textContent = usuario;
   renderTabla(usuario);
   renderHoy(usuario);
 
@@ -715,7 +805,7 @@ function iniciarSesion(usuario) {
 
 function cerrarSesion() {
   borrarSesion();
-  userChip.textContent = '—';
+  if (userChip) userChip.textContent = '—';
   renderTabla(null);
   renderHoy(null);
   actualizarTabAdmin(null);
@@ -725,10 +815,10 @@ function cerrarSesion() {
   if (btnInicio) btnInicio.disabled = true;
   if (btnLogin)  btnLogin.disabled  = false;
 
-  inputUsuario.value = '';
+  if (inputUsuario) inputUsuario.value = '';
   ocultarError();
   activarTab('login');
-  inputUsuario.focus();
+  if (inputUsuario) inputUsuario.focus();
 }
 
 function manejarLogin(evento) {
@@ -752,10 +842,6 @@ function manejarLogin(evento) {
   iniciarSesion(usuario);
 }
 
-/* ------------------------------------------------------------
-   18. NOTIFICACIONES DIARIAS (tareas)
-   ------------------------------------------------------------ */
-
 let reintentarDesde = 0;
 
 function claveNotificacion(fecha = new Date()) {
@@ -764,48 +850,38 @@ function claveNotificacion(fecha = new Date()) {
   return `${claveFecha(fecha)}|${usuario}`;
 }
 
-async function enviarNotificacion(clave) {
+async function enviarNotificacionDiaria(clave) {
   const sesion = leerSesion();
   if (!sesion) return false;
 
-  const tareas = tareasDeUsuario(sesion.usuario);
-  const cuerpo = tareas.length
-    ? `Buenos dias ${sesion.usuario}, hoy te tocan estas tareas: ${tareas.join(', ')}.`
-    : `Buenos dias ${sesion.usuario}, hoy no te toca ninguna tarea.`;
+  const cuerpo = construirMensajeTareas(sesion.usuario);
+  const ok = await mostrarNotificacionNativa('TusTareas', cuerpo, `tustareas-${clave}`);
 
-  const opciones = {
-    body: cuerpo,
-    icon: 'icon-192.png',
-    badge: 'icon-192.png',
-    tag: `tustareas-${clave}`
-  };
-
-  try {
-    const reg = await esperarServiceWorker();
-    if (reg) await reg.showNotification('TusTareas', opciones);
-    else new Notification('TusTareas', opciones);
-    localStorage.setItem(STORAGE_NOTIF, clave);
-    return true;
-  } catch (e) {
-    console.warn('No se pudo mostrar la notificación:', e);
-    return false;
-  }
+  if (ok) localStorage.setItem(STORAGE_NOTIF, clave);
+  return ok;
 }
 
 function revisarNotificaciones() {
   if (!permisoConcedido()) return;
-  if (!leerSesion()) return;
+
+  const sesion = leerSesion();
+  if (!sesion) return;
 
   const ahora = new Date();
   const diaSemana = ahora.getDay();
   if (diaSemana === 0 || diaSemana === 6) return;
-  if (ahora.getHours() < HORA_NOTIFICACION) return;
+
+  const { hora, minuto } = obtenerHoraNotificacion(sesion.usuario);
+  const ahoraMin   = ahora.getHours() * 60 + ahora.getMinutes();
+  const objetivoMin = hora * 60 + minuto;
+
+  if (ahoraMin < objetivoMin) return;
 
   const clave = claveNotificacion(ahora);
   if (localStorage.getItem(STORAGE_NOTIF) === clave) return;
   if (Date.now() < reintentarDesde) return;
 
-  enviarNotificacion(clave).then(ok => {
+  enviarNotificacionDiaria(clave).then(ok => {
     if (!ok) reintentarDesde = Date.now() + REINTENTO_MS;
   });
 }
@@ -818,10 +894,6 @@ function iniciarSistemaNotificaciones() {
   });
 }
 
-/* ------------------------------------------------------------
-   19. SERVICE WORKER
-   ------------------------------------------------------------ */
-
 function registrarServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
   window.addEventListener('load', () => {
@@ -831,27 +903,45 @@ function registrarServiceWorker() {
   });
 }
 
-/* ------------------------------------------------------------
-   20. INICIALIZACIÓN
-   ------------------------------------------------------------ */
-
 async function init() {
-  // [NUEVO] Primero intentar cargar la asignación real desde Firestore
+  if (estaEnModoInstalar()) {
+    activarModoInstalar();
+    if (btnInstalar) btnInstalar.addEventListener('click', intentarInstalar);
+    actualizarBotonInstalar();
+    registrarServiceWorker();
+    return;
+  }
+
   await cargarAsignacionDesdeFirestore();
 
   renderTabla(null);
   renderHoy(null);
   renderEditorAsignacion();
 
-  formLogin.addEventListener('submit', manejarLogin);
-  btnLogout.addEventListener('click', cerrarSesion);
+  if (formLogin)  formLogin.addEventListener('submit', manejarLogin);
+  if (btnLogout)  btnLogout.addEventListener('click', cerrarSesion);
 
-  if (btnAdminRev) btnAdminRev.addEventListener('click', solicitarRevision);
-  if (btnGuardarAsig) btnGuardarAsig.addEventListener('click', guardarAsignacion);
+  if (btnAdminRev)       btnAdminRev.addEventListener('click', solicitarRevision);
+  if (btnGuardarAsig)    btnGuardarAsig.addEventListener('click', guardarAsignacion);
+  if (btnRecordarTareas) btnRecordarTareas.addEventListener('click', notificarMisTareas);
+  if (btnReprogNotif)    btnReprogNotif.addEventListener('click', abrirModalHora);
 
-  inputUsuario.addEventListener('input', () => {
-    if (errorLogin.classList.contains('show')) ocultarError();
+  if (modalCancelar) modalCancelar.addEventListener('click', cerrarModalHora);
+  if (modalGuardar)  modalGuardar.addEventListener('click', guardarHoraSeleccionada);
+  if (modalHora) {
+    modalHora.addEventListener('click', (e) => {
+      if (e.target === modalHora) cerrarModalHora();
+    });
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && modalHora && !modalHora.hidden) cerrarModalHora();
   });
+
+  if (inputUsuario) {
+    inputUsuario.addEventListener('input', () => {
+      if (errorLogin && errorLogin.classList.contains('show')) ocultarError();
+    });
+  }
 
   botonesTab.forEach(boton => {
     boton.addEventListener('click', (ev) => {
@@ -877,13 +967,12 @@ async function init() {
     document.fonts.ready.then(() => posicionarIndicador(false));
   }
 
-  /* ---- AUTO-LOGIN ---- */
   const sesion = leerSesion();
   if (sesion) {
     iniciarSesion(sesion.usuario);
   } else {
     activarTab('login', false);
-    setTimeout(() => inputUsuario.focus(), 250);
+    if (inputUsuario) setTimeout(() => inputUsuario.focus(), 250);
   }
 
   registrarServiceWorker();

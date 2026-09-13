@@ -1,0 +1,4 @@
+Te paso estos archivos y tu:
+- Reorganizalo.
+- Saca los comentarios.
+- Pasame el codigo terminado y sin que le falte nada.

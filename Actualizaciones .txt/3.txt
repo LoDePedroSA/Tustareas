@@ -1,0 +1,19 @@
+Ya anda!!!, ahora hagamos esto:
+1- Haceme un html, el cual:
+1. Se conecte a la base de datos:
+const firebaseConfig = {
+    apiKey: "AIzaSyC8jSaP8e1UvLDn2sDdIyo2Z9o_KNhSEro",
+    authDomain: "tuesa-oficial.firebaseapp.com",
+    projectId: "tuesa-oficial",
+    storageBucket: "tuesa-oficial.firebasestorage.app",
+    messagingSenderId: "447951557213",
+    appId: "1:447951557213:web:293e062ae3fe474c1cb3b4"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+
+2. Que cree en "Base de Datos > dias >" un formato en el que a los dias se asignen a las personas. Por ahora que se pongan las personas en las tareas en los dias que ya estan definidos, es decir, que el html cree en el lugar dicho, una organizacion que el entienda y que el "index.html" sepa transcribirla y ponerla en la tabla del inicio.
+
+2- Configuremos al "index.html" para que pueda transcribir la informacion y ponerla en la tabla del inicio.
+
+3- Configuremos el panel de admin para que abajo del recuadro que ya hay, haya otro donde al administrador (Pedro), le permita modificar la tarea que se le asigna a cada uno. Y que abajo haya un boton que mande y actualice la informacion en la base de datos.

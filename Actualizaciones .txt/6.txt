@@ -1,0 +1,1 @@
+Sin generar ningun comentario ni nada, hagamos que si el usaurio entra a: "https://lodepedrosa.github.io/Tustareas/?=instalar", le aparezca en la pantalla unicamente un bonton que si el lo toca, le sale el recuadro de su navegador preguntandole si quiere dercargar nuestra app (es decir, qeu se ahorra hacer lo de los 3 puntitos y etc)

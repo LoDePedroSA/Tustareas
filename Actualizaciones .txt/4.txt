@@ -1,0 +1,12 @@
+1- Modifica el modelo de cambiar las personas de tareas, ya que se me hace complejo de la manera actual. Yo diria de hacer para cada una un select.
+2- Agrega un boton en la pagina de inicio: {
+    Texto: "Recordarme mis tareas"
+    Funcion: Le llega una notificacion con el formato de:
+    "
+    Buenos dias [usuario], hoy te tocan estas tareas: [tareas del dia de hoy]
+    " Que las tareas esten separadas por una coma ej: "[tarea #], [tarea #]...
+}
+3- Agrega un boton en la pagina de inicio: {
+    Texto: "Reprogramar mi notificacion diaria"
+    Funcion: le abre un menu al usuario donde el puede elegir a que hora le llegan las notificaciones cada dia. (de LUN > VIER)
+}

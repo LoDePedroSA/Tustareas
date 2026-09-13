@@ -1,8 +1,4 @@
-/* ============================================================
-   TusTareas — Service Worker
-   ============================================================ */
-
-const CACHE = 'tustareas-v3';
+const CACHE = 'tustareas-v4';
 
 const ARCHIVOS = [
   './',
@@ -40,7 +36,6 @@ self.addEventListener('fetch', evento => {
   if (peticion.method !== 'GET') return;
   if (!peticion.url.startsWith('http')) return;
 
-  // Estrategia network-first para HTML y JS: así siempre traemos lo último
   const url = peticion.url;
   const esCodigo = url.endsWith('.js') || url.endsWith('.html') || url.endsWith('/');
 
@@ -59,7 +54,6 @@ self.addEventListener('fetch', evento => {
     return;
   }
 
-  // Resto: cache-first
   evento.respondWith(
     caches.match(peticion).then(cacheada => {
       if (cacheada) return cacheada;

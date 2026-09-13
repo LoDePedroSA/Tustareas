@@ -31,7 +31,6 @@ function descargar(tamano) {
   const ctx = c.getContext('2d');
   const r = tamano * 0.22;
 
-  // Fondo con gradiente (esquinas redondeadas)
   const grad = ctx.createLinearGradient(0, 0, tamano, tamano);
   grad.addColorStop(0, '#5b5bd6');
   grad.addColorStop(1, '#8b5cf6');
@@ -50,7 +49,6 @@ function descargar(tamano) {
   ctx.fillStyle = grad;
   ctx.fill();
 
-  // Tildecito blanco
   ctx.strokeStyle = '#ffffff';
   ctx.lineWidth = tamano * 0.075;
   ctx.lineCap = 'round';

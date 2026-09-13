@@ -8,12 +8,10 @@
 
   <title>TusTareas</title>
 
-  <!-- PWA -->
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon-192.png">
 
-  <!-- Tipografías -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
@@ -22,147 +20,173 @@
 </head>
 <body>
 
-  <!-- Fondo decorativo -->
   <div class="bg-decor" aria-hidden="true">
     <span class="blob blob-1"></span>
     <span class="blob blob-2"></span>
     <span class="blob blob-3"></span>
   </div>
 
-  <!-- Encabezado -->
-  <header class="app-header">
-    <h1 class="logo">TusTareas</h1>
-    <p class="tagline">Las tareas de la casa, ordenadas</p>
-  </header>
-
-  <!-- Pestañas -->
-  <nav class="tabs" id="tabs" aria-label="Secciones">
-    <span class="tab-indicator" id="tab-indicator" aria-hidden="true"></span>
-    <button class="tab-btn active" data-tab="login" type="button">Iniciar sesión</button>
-    <button class="tab-btn" data-tab="inicio" type="button" disabled>Inicio</button>
-    <button class="tab-btn hidden" data-tab="panel-admin" type="button" disabled>Panel admin</button>
-  </nav>
-
-  <main>
-
-    <!-- ================= PANEL LOGIN ================= -->
-    <section class="panel active" id="panel-login">
-      <div class="card login-card">
-        <h2 class="card-title">¿Quién sos?</h2>
-        <p class="card-sub">Escribí tu nombre de usuario para entrar</p>
-
-        <form id="login-form" novalidate autocomplete="off">
-          <label class="field-label" for="username">Usuario</label>
-          <input
-            type="text"
-            id="username"
-            name="username"
-            placeholder="Ej: Mía"
-            spellcheck="false"
-            autocapitalize="off"
-            autocomplete="off"
-          >
-          <p class="error" id="login-error" role="alert"></p>
-
-          <button type="submit" class="btn btn-primary" id="login-btn">
-            Entrar
-          </button>
-        </form>
-      </div>
-    </section>
-
-    <!-- ================= PANEL INICIO ================= -->
-    <section class="panel" id="panel-inicio">
-      <div class="card">
-
-        <div class="inicio-top">
-          <button class="btn btn-ghost" id="logout-btn" type="button">Cerrar sesión</button>
-          <span class="user-chip" id="user-chip">—</span>
-        </div>
-
-        <h2 class="card-title">Tabla de tareas</h2>
-        <p class="card-sub">Así se reparten las tareas de la semana</p>
-
-        <div class="table-wrap">
-          <table id="tareas-table"></table>
-        </div>
-
-        <div class="hoy" id="hoy-box">
-          <h3 id="hoy-titulo">Hoy te toca</h3>
-          <ul id="hoy-lista"></ul>
-        </div>
-
-      </div>
-    </section>
-
-    <!-- ================= PANEL ADMIN ================= -->
-    <section class="panel" id="panel-panel-admin">
-      <div class="card admin-card">
-        <h2 class="card-title">Panel admin</h2>
-        <p class="card-sub">Herramientas de administración de revisiones</p>
-
-        <div class="admin-bloque">
-          <h3 class="admin-sub">Solicitar nueva revisión</h3>
-          <p class="admin-desc">
-            Crea una nueva revisión en la base de datos y reinicia la aplicación
-            para que todos los dispositivos la detecten.
-          </p>
-          <button class="btn btn-primary" id="btn-solicitar-revision" type="button">
-            Solicitar revisión
-          </button>
-        </div>
-        <div class="admin-bloque">
-  <h3 class="admin-sub">Editar asignación de tareas</h3>
-  <p class="admin-desc">
-    Modificá quién hace cada tarea cada día. Usá <strong>X</strong> para indicar
-    que nadie la hace, y barras (/) para tareas compartidas (ej: Mía/Pedro).
-  </p>
-
-  <div class="editor-wrap">
-    <table class="editor-tabla">
-      <thead>
-        <tr>
-          <th class="col-dia">DÍA</th>
-          <th>T1</th><th>T2</th><th>T3</th><th>T4</th>
-          <th>T5</th><th>T6</th><th>T7</th><th>T8</th>
-        </tr>
-      </thead>
-      <tbody id="editor-tbody"></tbody>
-    </table>
+  <div id="modo-instalar" class="modo-instalar" hidden>
+    <div class="modo-instalar-card">
+      <h1 class="modo-instalar-logo">TusTareas</h1>
+      <p class="modo-instalar-desc">Instalá la app en tu dispositivo para acceder más rápido.</p>
+      <button id="btn-instalar" class="btn btn-primary modo-instalar-btn" type="button">
+        Instalar app
+      </button>
+      <p id="instalar-estado" class="modo-instalar-estado"></p>
+    </div>
   </div>
 
-  <datalist id="personas-datalist">
-    <option value="X"></option>
-    <option value="Mía"></option>
-    <option value="Pedro"></option>
-    <option value="Ayelen"></option>
-    <option value="Lucía"></option>
-    <option value="Mía/Pedro"></option>
-    <option value="Pedro/Mía"></option>
-  </datalist>
+  <div id="app-contenido">
 
-  <div class="editor-legend">
-    T1: Secar vidrios · T2: Secar lo lavado · T3: Barrer en el medio dia ·
-    T4: Lavar en el Medio Día · T5: Limpiar mesa · T6: Limpiar mesa ·
-    T7: Lavar vasos · T8: Barrer noche
+    <header class="app-header">
+      <h1 class="logo">TusTareas</h1>
+      <p class="tagline">Las tareas de la casa, ordenadas</p>
+    </header>
+
+    <nav class="tabs" id="tabs" aria-label="Secciones">
+      <span class="tab-indicator" id="tab-indicator" aria-hidden="true"></span>
+      <button class="tab-btn active" data-tab="login" type="button">Iniciar sesión</button>
+      <button class="tab-btn" data-tab="inicio" type="button" disabled>Inicio</button>
+      <button class="tab-btn hidden" data-tab="panel-admin" type="button" disabled>Panel admin</button>
+    </nav>
+
+    <main>
+
+      <section class="panel active" id="panel-login">
+        <div class="card login-card">
+          <h2 class="card-title">¿Quién sos?</h2>
+          <p class="card-sub">Escribí tu nombre de usuario para entrar</p>
+
+          <form id="login-form" novalidate autocomplete="off">
+            <label class="field-label" for="username">Usuario</label>
+            <input
+              type="text"
+              id="username"
+              name="username"
+              placeholder="Ej: Mía"
+              spellcheck="false"
+              autocapitalize="off"
+              autocomplete="off"
+            >
+            <p class="error" id="login-error" role="alert"></p>
+
+            <button type="submit" class="btn btn-primary" id="login-btn">
+              Entrar
+            </button>
+          </form>
+        </div>
+      </section>
+
+      <section class="panel" id="panel-inicio">
+        <div class="card">
+
+          <div class="inicio-top">
+            <button class="btn btn-ghost" id="logout-btn" type="button">Cerrar sesión</button>
+            <span class="user-chip" id="user-chip">—</span>
+          </div>
+
+          <h2 class="card-title">Tabla de tareas</h2>
+          <p class="card-sub">Así se reparten las tareas de la semana</p>
+
+          <div class="table-wrap">
+            <table id="tareas-table"></table>
+          </div>
+
+          <div class="hoy" id="hoy-box">
+            <h3 id="hoy-titulo">Hoy te toca</h3>
+            <ul id="hoy-lista"></ul>
+          </div>
+
+          <div class="inicio-acciones">
+            <button class="btn btn-secondary" id="btn-recordar-tareas" type="button">
+              Recordarme mis tareas
+            </button>
+            <button class="btn btn-secondary" id="btn-reprogramar-notif" type="button">
+              Reprogramar mi notificación diaria
+            </button>
+          </div>
+
+        </div>
+      </section>
+
+      <section class="panel" id="panel-panel-admin">
+        <div class="card admin-card">
+          <h2 class="card-title">Panel admin</h2>
+          <p class="card-sub">Herramientas de administración de revisiones</p>
+
+          <div class="admin-bloque">
+            <h3 class="admin-sub">Solicitar nueva revisión</h3>
+            <p class="admin-desc">
+              Crea una nueva revisión en la base de datos y reinicia la aplicación
+              para que todos los dispositivos la detecten.
+            </p>
+            <button class="btn btn-primary" id="btn-solicitar-revision" type="button">
+              Solicitar revisión
+            </button>
+          </div>
+
+          <p class="admin-estado" id="admin-estado"></p>
+
+          <div class="admin-bloque">
+            <h3 class="admin-sub">Editar asignación de tareas</h3>
+            <p class="admin-desc">
+              Elegí quién hace cada tarea cada día. Usá <strong>—</strong> para indicar
+              que nadie la hace, o las opciones con barra (/) para tareas compartidas.
+            </p>
+
+            <div class="editor-wrap">
+              <table class="editor-tabla">
+                <thead>
+                  <tr>
+                    <th class="col-dia">DÍA</th>
+                    <th>T1</th><th>T2</th><th>T3</th><th>T4</th>
+                    <th>T5</th><th>T6</th><th>T7</th><th>T8</th>
+                  </tr>
+                </thead>
+                <tbody id="editor-tbody"></tbody>
+              </table>
+            </div>
+
+            <div class="editor-legend">
+              T1: Secar vidrios · T2: Secar lo lavado · T3: Barrer en el medio dia ·
+              T4: Lavar en el Medio Día · T5: Limpiar mesa · T6: Limpiar mesa ·
+              T7: Lavar vasos · T8: Barrer noche
+            </div>
+
+            <button class="btn btn-primary" id="btn-guardar-asignacion" type="button">
+              Guardar cambios en la base de datos
+            </button>
+
+            <p class="admin-estado" id="editor-estado"></p>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <div class="toast-container" id="toast-container" aria-live="polite"></div>
+
+    <div class="modal-overlay" id="modal-hora" hidden>
+      <div class="modal">
+        <h3 class="modal-title">Reprogramar notificación diaria</h3>
+        <p class="modal-desc">
+          Elegí a qué hora querés recibir tu recordatorio de tareas.
+          Se envía de lunes a viernes.
+        </p>
+
+        <label class="field-label" for="hora-input">Hora del recordatorio</label>
+        <input type="time" id="hora-input" value="20:00">
+
+        <div class="modal-actions">
+          <button class="btn btn-ghost" id="modal-cancelar" type="button">Cancelar</button>
+          <button class="btn btn-primary" id="modal-guardar" type="button">Guardar</button>
+        </div>
+      </div>
+    </div>
+
   </div>
 
-  <button class="btn btn-primary" id="btn-guardar-asignacion" type="button">
-    Guardar cambios en la base de datos
-  </button>
-
-  <p class="admin-estado" id="editor-estado"></p>
-</div>
-
-        <p class="admin-estado" id="admin-estado"></p>
-      </div>
-    </section>
-  </main>
-  
-  <!-- Contenedor de notificaciones internas -->
-  <div class="toast-container" id="toast-container" aria-live="polite"></div>
-
-  <!-- Firebase SDK (compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 
