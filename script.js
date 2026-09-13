@@ -34,7 +34,6 @@ const USUARIOS = [...new Set(
     .flatMap(celda => celda.split('/'))
 )].sort((a, b) => a.localeCompare(b, 'es'));
 
-/* Usuario con acceso al panel admin */
 const USUARIO_ADMIN = 'Pedro';
 
 /* ------------------------------------------------------------
@@ -52,10 +51,6 @@ const firebaseConfig = {
 
 let _db = null;
 
-/**
- * Inicializa Firebase (una sola vez) y devuelve la instancia de Firestore.
- * Devuelve null si no se pudo inicializar.
- */
 function obtenerDb() {
   try {
     if (typeof firebase === 'undefined') {
@@ -84,8 +79,8 @@ const HORA_NOTIFICACION = 20;
 const REINTENTO_MS      = 2 * 60 * 1000;
 const CHEQUEO_MS        = 30 * 1000;
 
-const COLECCION     = 'tustareas';
-const DOC_ULTIMA    = 'ultima_revision';
+const COLECCION  = 'tustareas';
+const DOC_ULTIMA = 'ultima_revision';
 
 /* ------------------------------------------------------------
    4. UTILIDADES
@@ -119,16 +114,13 @@ function buscarUsuario(entrada) {
 function tareasDeUsuario(usuario, fecha = new Date()) {
   const fila = ASIGNACION[nombreDia(fecha)];
   if (!fila) return [];
-
   const objetivo = normalizar(usuario);
   const resultado = [];
-
   fila.forEach((celda, indice) => {
     if (celda === 'X') return;
     const asignados = celda.split('/').map(normalizar);
     if (asignados.includes(objetivo)) resultado.push(TAREAS[indice + 1]);
   });
-
   return resultado;
 }
 
@@ -146,9 +138,7 @@ function guardarSesion(usuario) {
       usuario,
       fecha: new Date().toISOString()
     }));
-  } catch (e) {
-    console.warn('No se pudo guardar la sesión:', e);
-  }
+  } catch (e) { console.warn('No se pudo guardar la sesión:', e); }
 }
 
 function leerSesion() {
@@ -159,9 +149,7 @@ function leerSesion() {
     if (!datos || !datos.usuario) return null;
     if (!USUARIOS.includes(datos.usuario)) return null;
     return datos;
-  } catch (e) {
-    return null;
-  }
+  } catch (e) { return null; }
 }
 
 function borrarSesion() {
@@ -204,7 +192,7 @@ const toastContainer = document.getElementById('toast-container');
 
 function posicionarIndicador(animar = true) {
   const activo = tabsEl.querySelector('.tab-btn.active');
-  if (!activo || activo.offsetParent === null) return; // si está oculto, no hacer nada
+  if (!activo || activo.offsetParent === null) return;
 
   const r = activo.getBoundingClientRect();
   const c = tabsEl.getBoundingClientRect();
@@ -222,14 +210,18 @@ function posicionarIndicador(animar = true) {
 }
 
 function activarTab(nombre, animar = true) {
+  console.log('[activarTab]', nombre);
+
   botonesTab.forEach(b => b.classList.toggle('active', b.dataset.tab === nombre));
 
   Object.entries(paneles).forEach(([clave, el]) => {
     if (el) el.classList.toggle('active', clave === nombre);
   });
 
-  // Esperar al reflow por si cambió la visibilidad de algún botón
-  requestAnimationFrame(() => posicionarIndicador(animar));
+  // [FIX] Doble rAF: en móviles el layout a veces necesita más de un frame
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => posicionarIndicador(animar));
+  });
 }
 
 /* ------------------------------------------------------------
@@ -246,37 +238,29 @@ function renderTabla(usuarioActual = null) {
   for (const dia of DIAS) {
     html += `<tr><th class="col-dia" scope="row">${dia}</th>`;
     for (const celda of ASIGNACION[dia]) {
-      if (celda === 'X') {
-        html += '<td class="celda-vacia">—</td>';
-        continue;
-      }
+      if (celda === 'X') { html += '<td class="celda-vacia">—</td>'; continue; }
       const esMia = objetivo && celda.split('/').map(normalizar).includes(objetivo);
       html += `<td class="${esMia ? 'celda-mia' : ''}">${celda}</td>`;
     }
     html += '</tr>';
   }
-
   html += '</tbody>';
   tabla.innerHTML = html;
 }
 
 function renderHoy(usuario) {
   hoyLista.innerHTML = '';
-
   if (!usuario) {
     hoyTitulo.textContent = 'Hoy te toca';
     hoyLista.innerHTML = '<p class="vacio">Iniciá sesión para ver tus tareas de hoy.</p>';
     return;
   }
-
   const tareas = tareasDeUsuario(usuario);
-
   if (tareas.length === 0) {
     hoyTitulo.textContent = `Hoy, ${usuario}, no tenés tareas`;
     hoyLista.innerHTML = '<p class="vacio">Disfrutá el día libre.</p>';
     return;
   }
-
   hoyTitulo.textContent = `Hoy te toca, ${usuario}`;
   tareas.forEach(t => {
     const li = document.createElement('li');
@@ -294,30 +278,27 @@ function actualizarTabAdmin(usuario) {
   if (!btnAdmin) return;
 
   const mostrar = usuario && esAdmin(usuario);
+  console.log('[actualizarTabAdmin]', usuario, 'mostrar=', mostrar);
 
   if (mostrar) {
     btnAdmin.classList.remove('hidden');
     btnAdmin.disabled = false;
   } else {
-    // Si estaba activa esta pestaña, volver a inicio antes de ocultarla
-    if (btnAdmin.classList.contains('active')) {
-      activarTab('inicio');
-    }
+    if (btnAdmin.classList.contains('active')) activarTab('inicio');
     btnAdmin.classList.add('hidden');
     btnAdmin.disabled = true;
   }
 
-  // Reposicionar el indicador porque cambió el layout
-  requestAnimationFrame(() => posicionarIndicador());
+  // [FIX] Reposicionar tras el reflow, no antes
+  setTimeout(() => posicionarIndicador(), 60);
 }
 
 /* ------------------------------------------------------------
-   10. TOASTS (notificaciones internas)
+   10. TOASTS
    ------------------------------------------------------------ */
 
 function mostrarToast(titulo, cuerpo, duracion = 8000) {
   if (!toastContainer) return;
-
   const toast = document.createElement('div');
   toast.className = 'toast';
 
@@ -333,13 +314,11 @@ function mostrarToast(titulo, cuerpo, duracion = 8000) {
   toast.appendChild(p);
   toastContainer.appendChild(toast);
 
-  // Click para cerrar
   toast.addEventListener('click', () => {
     toast.classList.add('removing');
     setTimeout(() => toast.remove(), 300);
   });
 
-  // Auto cierre
   setTimeout(() => {
     toast.classList.add('removing');
     setTimeout(() => toast.remove(), 300);
@@ -347,7 +326,7 @@ function mostrarToast(titulo, cuerpo, duracion = 8000) {
 }
 
 /* ------------------------------------------------------------
-   11. SONIDO
+   11. AUDIO
    ------------------------------------------------------------ */
 
 let _audioPendiente = null;
@@ -356,12 +335,9 @@ function reproducirSonidoNotificacion() {
   try {
     const audio = new Audio('notificacion.mp3');
     audio.volume = 1;
-
     const promesa = audio.play();
     if (promesa && typeof promesa.catch === 'function') {
       promesa.catch(() => {
-        // El navegador bloqueó el audio (autoplay). Lo guardamos y lo
-        // reintentamos al primer toque del usuario.
         _audioPendiente = audio;
         const reintentar = () => {
           if (_audioPendiente) {
@@ -373,13 +349,23 @@ function reproducirSonidoNotificacion() {
         document.addEventListener('touchstart', reintentar, { once: true });
       });
     }
-  } catch (e) {
-    console.warn('No se pudo reproducir el sonido:', e);
-  }
+  } catch (e) { console.warn('No se pudo reproducir el sonido:', e); }
+}
+
+// [FIX] Desbloquear audio en el primer toque (iOS/Safari y algunos Android)
+function desbloquearAudio() {
+  try {
+    const audio = new Audio('notificacion.mp3');
+    audio.volume = 0;
+    const p = audio.play();
+    if (p && typeof p.then === 'function') {
+      p.then(() => { audio.pause(); audio.currentTime = 0; }).catch(() => {});
+    }
+  } catch (e) {}
 }
 
 /* ------------------------------------------------------------
-   12. NOTIFICACIONES DEL NAVEGADOR
+   12. PERMISO DE NOTIFICACIONES
    ------------------------------------------------------------ */
 
 function permisoConcedido() {
@@ -387,17 +373,51 @@ function permisoConcedido() {
 }
 
 async function pedirPermisoNotificaciones() {
-  if (typeof Notification === 'undefined') return;
-  if (Notification.permission !== 'default') return;
+  if (typeof Notification === 'undefined') {
+    console.warn('Este navegador no soporta Notification API.');
+    return false;
+  }
+  if (Notification.permission === 'granted') return true;
+  if (Notification.permission === 'denied') {
+    console.warn('El permiso de notificaciones fue denegado previamente.');
+    return false;
+  }
   try {
-    await Notification.requestPermission();
+    const resultado = await Notification.requestPermission();
+    console.log('[permiso notificaciones]', resultado);
+    return resultado === 'granted';
   } catch (e) {
     console.warn('No se pudo pedir permiso de notificaciones:', e);
+    return false;
   }
 }
 
 /* ------------------------------------------------------------
-   13. REVISIÓN PENDIENTE (se ejecuta al iniciar sesión)
+   13. SERVICE WORKER READY
+   ------------------------------------------------------------ */
+
+// [FIX] Esperar a que el SW esté activo antes de usarlo para notificar
+async function esperarServiceWorker(timeoutMs = 6000) {
+  if (!('serviceWorker' in navigator)) return null;
+
+  const yaListo = await navigator.serviceWorker.getRegistration();
+  if (yaListo && yaListo.active) return yaListo;
+
+  return new Promise(resolve => {
+    const timeout = setTimeout(() => resolve(null), timeoutMs);
+
+    navigator.serviceWorker.ready.then(reg => {
+      clearTimeout(timeout);
+      resolve(reg);
+    }).catch(() => {
+      clearTimeout(timeout);
+      resolve(null);
+    });
+  });
+}
+
+/* ------------------------------------------------------------
+   14. REVISIÓN PENDIENTE
    ------------------------------------------------------------ */
 
 async function revisionpendiente() {
@@ -411,78 +431,80 @@ async function revisionpendiente() {
   }
 
   try {
-    // 1. Leer número de última revisión
     const ultimaSnap = await db.collection(COLECCION).doc(DOC_ULTIMA).get();
     if (!ultimaSnap.exists) return;
 
     const numeroRev = ultimaSnap.data().revision;
     if (numeroRev == null) return;
 
-    // 2. Buscar documento con ese número de revisión
     const querySnap = await db.collection(COLECCION)
       .where('revision', '==', numeroRev)
       .get();
-
     if (querySnap.empty) return;
 
-    // Excluir el documento "ultima_revision" por si tiene el mismo número
     const docRev = querySnap.docs.find(d => d.id !== DOC_ULTIMA);
     if (!docRev) return;
 
     const data = docRev.data();
-
-    // 3. Buscar el campo que corresponda al usuario (sin tildes ni mayúsculas)
     const usuarioNorm = normalizar(sesion.usuario);
-    let valor = undefined;
-
+    let valor;
     for (const [clave, val] of Object.entries(data)) {
-      if (normalizar(clave) === usuarioNorm) {
-        valor = val;
-        break;
-      }
+      if (normalizar(clave) === usuarioNorm) { valor = val; break; }
     }
 
-    // 4. Si está en false, notificar
+    console.log('[revisionpendiente] rev=', numeroRev, 'valor usuario=', valor);
+
     if (valor === false) {
-      mostrarNotificacionRevision(numeroRev);
+      await mostrarNotificacionRevision(numeroRev);
     }
-    // Si está en true o no existe el campo, no pasa nada.
-
   } catch (e) {
     console.error('Error en revisionpendiente:', e);
   }
 }
 
-function mostrarNotificacionRevision(numeroRev) {
+async function mostrarNotificacionRevision(numeroRev) {
   const titulo = 'Prueba de Notificacion - Tus Tareas';
   const cuerpo = `Esta es una prueba para comprobar que el sistema ande bien (revision "${numeroRev}")`;
 
   // Sonido
   reproducirSonidoNotificacion();
 
-  // Notificación del navegador
-  if (permisoConcedido()) {
-    navigator.serviceWorker.getRegistration()
-      .then(reg => {
-        const opciones = {
-          body: cuerpo,
-          icon: 'icon-192.png',
-          badge: 'icon-192.png',
-          tag: 'tustareas-revision-' + numeroRev,
-          requireInteraction: true
-        };
-        if (reg) return reg.showNotification(titulo, opciones);
-        return new Notification(titulo, opciones);
-      })
-      .catch(e => console.warn('No se pudo mostrar la notificación nativa:', e));
+  // Toast interno (siempre aparece)
+  mostrarToast(titulo, cuerpo, 12000);
+
+  // Notificación nativa
+  if (!permisoConcedido()) {
+    console.warn('Sin permiso de notificaciones. Solo se muestra el toast interno.');
+    return;
   }
 
-  // Toast interno (siempre aparece, para asegurar visibilidad)
-  mostrarToast(titulo, cuerpo, 12000);
+  // [FIX] Esperar al SW antes de notificar
+  const reg = await esperarServiceWorker();
+
+  try {
+    const opciones = {
+      body: cuerpo,
+      icon: 'icon-192.png',
+      badge: 'icon-192.png',
+      tag: 'tustareas-revision-' + numeroRev,
+      requireInteraction: true
+    };
+
+    if (reg) {
+      await reg.showNotification(titulo, opciones);
+      console.log('[notificación] mostrada vía SW');
+    } else {
+      // Fallback: algunos navegadores móviles permiten new Notification directo
+      new Notification(titulo, opciones);
+      console.log('[notificación] mostrada vía new Notification (fallback)');
+    }
+  } catch (e) {
+    console.error('No se pudo mostrar la notificación nativa:', e);
+  }
 }
 
 /* ------------------------------------------------------------
-   14. SOLICITAR REVISIÓN (panel admin)
+   15. SOLICITAR REVISIÓN
    ------------------------------------------------------------ */
 
 async function solicitarRevision() {
@@ -494,7 +516,7 @@ async function solicitarRevision() {
   const db = obtenerDb();
   if (!db) {
     if (adminEstado) {
-      adminEstado.textContent = 'No se pudo conectar con el servidor. Revisá tu conexión.';
+      adminEstado.textContent = 'No se pudo conectar con el servidor.';
       adminEstado.className = 'admin-estado error';
     }
     alert('No se pudo conectar con el servidor. Revisá tu conexión.');
@@ -502,12 +524,10 @@ async function solicitarRevision() {
   }
 
   try {
-    // 1. Leer última revisión
     const ultimaSnap = await db.collection(COLECCION).doc(DOC_ULTIMA).get();
     const revActual = ultimaSnap.exists ? (ultimaSnap.data().revision || 0) : 0;
     const nuevaRev  = Number(revActual) + 1;
 
-    // 2. Crear nuevo documento de revisión
     const nuevoDoc = {
       fecha: firebase.firestore.FieldValue.serverTimestamp(),
       revision: nuevaRev,
@@ -519,10 +539,6 @@ async function solicitarRevision() {
     };
 
     await db.collection(COLECCION).add(nuevoDoc);
-
-    // 3. Actualizar el puntero de última revisión.
-    // NOTA: esto no estaba explícito en las instrucciones, pero sin esta línea
-    // la app seguiría leyendo la revisión anterior y la nueva nunca se detectaría.
     await db.collection(COLECCION).doc(DOC_ULTIMA).set(
       { revision: nuevaRev },
       { merge: true }
@@ -533,25 +549,22 @@ async function solicitarRevision() {
       adminEstado.className = 'admin-estado ok';
     }
 
-    // 4. Avisos
     alert(`Se solicito una revision exitosamente, el numero de revision es: ${nuevaRev}`);
     alert('En breve se le reiniciara la aplicacion...');
 
-    // 5. Recargar a los 5 segundos
     setTimeout(() => location.reload(), 5000);
-
   } catch (e) {
     console.error('Error al solicitar revisión:', e);
     if (adminEstado) {
-      adminEstado.textContent = 'Error al solicitar la revisión: ' + (e.message || e);
+      adminEstado.textContent = 'Error: ' + (e.message || e);
       adminEstado.className = 'admin-estado error';
     }
-    alert('Hubo un error al solicitar la revisión. Revisá la consola para más detalles.');
+    alert('Hubo un error al solicitar la revisión.');
   }
 }
 
 /* ------------------------------------------------------------
-   15. LOGIN / LOGOUT
+   16. LOGIN / LOGOUT
    ------------------------------------------------------------ */
 
 function mostrarError(mensaje) {
@@ -567,41 +580,30 @@ function ocultarError() {
 }
 
 function iniciarSesion(usuario) {
+  console.log('[iniciarSesion]', usuario);
   userChip.textContent = usuario;
 
   renderTabla(usuario);
   renderHoy(usuario);
 
-  // Pestaña inicio habilitada, login bloqueado
   const btnInicio = botonesTab.find(b => b.dataset.tab === 'inicio');
   const btnLogin  = botonesTab.find(b => b.dataset.tab === 'login');
   if (btnInicio) btnInicio.disabled = false;
   if (btnLogin)  btnLogin.disabled  = true;
 
-  // Mostrar/ocultar panel admin
   actualizarTabAdmin(usuario);
-
-  // Ir a inicio
   activarTab('inicio');
 
-  // Pedir permiso de notificaciones
   pedirPermisoNotificaciones();
-
-  // Revisar notificación diaria pendiente
   revisarNotificaciones();
-
-  // Revisar si hay una revisión pendiente para este usuario
   revisionpendiente();
 }
 
 function cerrarSesion() {
   borrarSesion();
-
   userChip.textContent = '—';
   renderTabla(null);
   renderHoy(null);
-
-  // Ocultar panel admin
   actualizarTabAdmin(null);
 
   const btnInicio = botonesTab.find(b => b.dataset.tab === 'inicio');
@@ -611,14 +613,12 @@ function cerrarSesion() {
 
   inputUsuario.value = '';
   ocultarError();
-
   activarTab('login');
   inputUsuario.focus();
 }
 
 function manejarLogin(evento) {
   evento.preventDefault();
-
   const valor = inputUsuario.value.trim();
 
   if (!valor) {
@@ -628,7 +628,6 @@ function manejarLogin(evento) {
   }
 
   const usuario = buscarUsuario(valor);
-
   if (!usuario) {
     mostrarError(`No encontramos a "${valor}". Probá con Mía, Pedro, Ayelen o Lucía.`);
     return;
@@ -640,7 +639,7 @@ function manejarLogin(evento) {
 }
 
 /* ------------------------------------------------------------
-   16. NOTIFICACIONES DIARIAS (tareas)
+   17. NOTIFICACIONES DIARIAS (tareas)
    ------------------------------------------------------------ */
 
 let reintentarDesde = 0;
@@ -656,7 +655,6 @@ async function enviarNotificacion(clave) {
   if (!sesion) return false;
 
   const tareas = tareasDeUsuario(sesion.usuario);
-
   const cuerpo = tareas.length
     ? `Buenos dias ${sesion.usuario}, hoy te tocan estas tareas: ${tareas.join(', ')}.`
     : `Buenos dias ${sesion.usuario}, hoy no te toca ninguna tarea.`;
@@ -665,19 +663,16 @@ async function enviarNotificacion(clave) {
     body: cuerpo,
     icon: 'icon-192.png',
     badge: 'icon-192.png',
-    tag: `tustareas-${clave}`,
-    renotify: false
+    tag: `tustareas-${clave}`
   };
 
   try {
-    if ('serviceWorker' in navigator) {
-      const registro = await navigator.serviceWorker.getRegistration();
-      if (registro) await registro.showNotification('TusTareas', opciones);
-      else new Notification('TusTareas', opciones);
+    const reg = await esperarServiceWorker();
+    if (reg) {
+      await reg.showNotification('TusTareas', opciones);
     } else {
       new Notification('TusTareas', opciones);
     }
-
     localStorage.setItem(STORAGE_NOTIF, clave);
     return true;
   } catch (e) {
@@ -692,7 +687,6 @@ function revisarNotificaciones() {
 
   const ahora = new Date();
   const diaSemana = ahora.getDay();
-
   if (diaSemana === 0 || diaSemana === 6) return;
   if (ahora.getHours() < HORA_NOTIFICACION) return;
 
@@ -703,7 +697,7 @@ function revisarNotificaciones() {
   enviarNotificacion(clave).then(ok => {
     if (!ok) {
       reintentarDesde = Date.now() + REINTENTO_MS;
-      console.info('No se pudo enviar la notificación. Reintentando en 2 minutos...');
+      console.info('Reintentando notificación en 2 minutos...');
     }
   });
 }
@@ -711,30 +705,35 @@ function revisarNotificaciones() {
 function iniciarSistemaNotificaciones() {
   revisarNotificaciones();
   setInterval(revisarNotificaciones, CHEQUEO_MS);
-
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) revisarNotificaciones();
   });
 }
 
 /* ------------------------------------------------------------
-   17. SERVICE WORKER
+   18. SERVICE WORKER
    ------------------------------------------------------------ */
 
 function registrarServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(err => {
+    navigator.serviceWorker.register('sw.js').then(() => {
+      console.log('[SW] registrado');
+    }).catch(err => {
       console.warn('No se pudo registrar el Service Worker:', err);
     });
   });
 }
 
 /* ------------------------------------------------------------
-   18. INICIALIZACIÓN
+   19. INICIALIZACIÓN
    ------------------------------------------------------------ */
 
 function init() {
+  console.log('[init] TusTareas');
+  console.log('[init] Notification:', typeof Notification !== 'undefined' ? Notification.permission : 'no soportado');
+  console.log('[init] SW:', 'serviceWorker' in navigator);
+
   renderTabla(null);
   renderHoy(null);
 
@@ -750,20 +749,33 @@ function init() {
   });
 
   botonesTab.forEach(boton => {
-    boton.addEventListener('click', () => {
+    // [FIX] pointerup + click para máxima compatibilidad en táctil
+    boton.addEventListener('click', (ev) => {
+      ev.preventDefault();
       if (boton.disabled) return;
       activarTab(boton.dataset.tab);
     });
   });
 
+  // [FIX] Pedir permiso de notificaciones y desbloquear audio en el primer toque
+  const primerToque = async () => {
+    desbloquearAudio();
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      await pedirPermisoNotificaciones();
+    }
+    revisarNotificaciones();
+  };
+  document.addEventListener('pointerdown', primerToque, { once: true, passive: true });
+
   window.addEventListener('resize', () => posicionarIndicador(false));
+  window.addEventListener('orientationchange', () => setTimeout(() => posicionarIndicador(false), 250));
+
   if (document.fonts && document.fonts.ready) {
     document.fonts.ready.then(() => posicionarIndicador(false));
   }
 
   /* ---- AUTO-LOGIN ---- */
   const sesion = leerSesion();
-
   if (sesion) {
     iniciarSesion(sesion.usuario);
   } else {

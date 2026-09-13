@@ -517,9 +517,21 @@ td.celda-vacia { color: #c9cbdb; }
    AMPLIACIONES — Panel admin, toast y pestaña oculta
    ============================================================ */
 
-/* Pestaña oculta por defecto */
 .tab-btn.hidden {
   display: none;
+}
+
+/* El indicador nunca debe capturar clicks */
+.tab-indicator {
+  pointer-events: none !important;
+}
+
+/* Botones táctiles más robustos */
+.tab-btn {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 /* ---------- Panel admin ---------- */
@@ -568,7 +580,7 @@ td.celda-vacia { color: #c9cbdb; }
 .admin-estado.ok    { color: #2f9e6b; }
 .admin-estado.error { color: var(--danger); }
 
-/* ---------- Toasts (notificaciones internas) ---------- */
+/* ---------- Toasts ---------- */
 
 .toast-container {
   position: fixed;
@@ -596,9 +608,7 @@ td.celda-vacia { color: #c9cbdb; }
   animation: toastIn .38s cubic-bezier(.22, 1, .36, 1);
 }
 
-.toast.removing {
-  animation: toastOut .3s ease forwards;
-}
+.toast.removing { animation: toastOut .3s ease forwards; }
 
 .toast-title {
   margin: 0 0 4px;
@@ -618,38 +628,30 @@ td.celda-vacia { color: #c9cbdb; }
   from { opacity: 0; transform: translateX(48px) scale(.97); }
   to   { opacity: 1; transform: none; }
 }
-
 @keyframes toastOut {
   from { opacity: 1; transform: none; }
   to   { opacity: 0; transform: translateX(48px) scale(.97); }
 }
 
-/* Ajustes responsive para 3 pestañas */
+/* ---------- Responsive de las pestañas ---------- */
+
 @media (max-width: 620px) {
+  .tabs { padding: 5px; gap: 4px; }
   .tab-btn {
-    padding: 10px 16px;
+    padding: 11px 16px;
     font-size: .85rem;
+    min-height: 42px;
   }
 }
 
-@media (max-width: 400px) {
+@media (max-width: 420px) {
+  .tabs { padding: 4px; gap: 3px; }
   .tab-btn {
-    padding: 9px 11px;
+    padding: 10px 10px;
     font-size: .78rem;
+    min-height: 40px;
+    letter-spacing: -0.01em;
   }
-  .toast-container {
-    top: 10px;
-    right: 10px;
-    left: 10px;
-  }
+  .toast-container { top: 10px; right: 10px; left: 10px; }
   .toast { max-width: 100%; min-width: 0; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: .001ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: .001ms !important;
-  }
-  
 }

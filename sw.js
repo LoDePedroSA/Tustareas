@@ -2,7 +2,7 @@
    TusTareas — Service Worker
    ============================================================ */
 
-const CACHE = 'tustareas-v2';
+const CACHE = 'tustareas-v3';
 
 const ARCHIVOS = [
   './',
@@ -15,19 +15,16 @@ const ARCHIVOS = [
   './icon-512.png'
 ];
 
-/* ---------- Instalación ---------- */
 self.addEventListener('install', evento => {
+  self.skipWaiting();
   evento.waitUntil(
     caches.open(CACHE)
       .then(cache => cache.addAll(ARCHIVOS).catch(err => {
-        // Si algún archivo falla (ej: falta el PNG), no rompemos la instalación
         console.warn('Algún archivo no se pudo cachear:', err);
       }))
-      .then(() => self.skipWaiting())
   );
 });
 
-/* ---------- Activación ---------- */
 self.addEventListener('activate', evento => {
   evento.waitUntil(
     caches.keys()
@@ -38,17 +35,34 @@ self.addEventListener('activate', evento => {
   );
 });
 
-/* ---------- Fetch ---------- */
 self.addEventListener('fetch', evento => {
   const peticion = evento.request;
-
   if (peticion.method !== 'GET') return;
   if (!peticion.url.startsWith('http')) return;
 
+  // Estrategia network-first para HTML y JS: así siempre traemos lo último
+  const url = peticion.url;
+  const esCodigo = url.endsWith('.js') || url.endsWith('.html') || url.endsWith('/');
+
+  if (esCodigo) {
+    evento.respondWith(
+      fetch(peticion)
+        .then(respuesta => {
+          if (respuesta && respuesta.status === 200) {
+            const copia = respuesta.clone();
+            caches.open(CACHE).then(c => c.put(peticion, copia)).catch(() => {});
+          }
+          return respuesta;
+        })
+        .catch(() => caches.match(peticion).then(r => r || caches.match('./index.html')))
+    );
+    return;
+  }
+
+  // Resto: cache-first
   evento.respondWith(
     caches.match(peticion).then(cacheada => {
       if (cacheada) return cacheada;
-
       return fetch(peticion)
         .then(respuesta => {
           if (respuesta && respuesta.status === 200) {
@@ -62,10 +76,8 @@ self.addEventListener('fetch', evento => {
   );
 });
 
-/* ---------- Click en notificación ---------- */
 self.addEventListener('notificationclick', evento => {
   evento.notification.close();
-
   evento.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(lista => {
       for (const cliente of lista) {
