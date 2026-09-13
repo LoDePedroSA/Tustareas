@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Configurar TusTareas</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    padding: 40px 20px;
+    max-width: 760px;
+    margin: auto;
+    background: #f4f5fb;
+    color: #17182b;
+  }
+  h1 { margin-top: 0; font-size: 1.8rem; }
+  h2 { font-size: 1.1rem; margin-top: 32px; color: #3a3d55; }
+  p  { line-height: 1.55; color: #555; }
+  code {
+    background: #fff;
+    padding: 2px 6px;
+    border-radius: 5px;
+    font-size: .9em;
+    color: #5b5bd6;
+  }
+  pre {
+    background: #fff;
+    padding: 16px;
+    border-radius: 12px;
+    overflow-x: auto;
+    font-size: .82rem;
+    line-height: 1.5;
+    border: 1px solid #e8e9f3;
+  }
+  button {
+    padding: 14px 24px;
+    margin: 6px 8px 6px 0;
+    border: 0;
+    border-radius: 12px;
+    background: linear-gradient(120deg, #5b5bd6, #8b5cf6);
+    color: #fff;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform .2s, box-shadow .25s;
+    box-shadow: 0 14px 24px -14px rgba(91, 91, 214, 1);
+  }
+  button:hover { transform: translateY(-2px); }
+  button:active { transform: scale(.97); }
+  button.secundario {
+    background: #fff;
+    color: #555;
+    border: 1.5px solid #e8e9f3;
+    box-shadow: none;
+  }
+  button.secundario:hover { color: #5b5bd6; border-color: #c7c9ff; }
+  #estado {
+    margin-top: 20px;
+    padding: 14px 18px;
+    border-radius: 12px;
+    font-size: .93rem;
+    background: #fff;
+    border-left: 4px solid #b0b2c4;
+    display: none;
+  }
+  #estado.visible { display: block; }
+  #estado.ok    { border-left-color: #2f9e6b; color: #2f9e6b; }
+  #estado.error { border-left-color: #d94a4a; color: #d94a4a; }
+</style>
+</head>
+<body>
+
+  <h1>Configuración inicial de TusTareas</h1>
+  <p>
+    Este archivo crea el documento <code>tustareas/dias</code> en Firestore
+    con la asignación de tareas por defecto. Se puede ejecutar varias veces:
+    cada vez sobreescribe el documento con los valores de abajo.
+  </p>
+
+  <h2>Estructura que se va a crear</h2>
+  <p>Colección: <code>tustareas</code> → Documento: <code>dias</code></p>
+  <pre id="preview"></pre>
+
+  <h2>Acciones</h2>
+  <button onclick="crearEstructura()">Crear / restaurar estructura</button>
+  <button class="secundario" onclick="verificar()">Verificar estado actual</button>
+  <button class="secundario" onclick="borrar()">Borrar documento</button>
+
+  <div id="estado"></div>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyC8jSaP8e1UvLDn2sDdIyo2Z9o_KNhSEro",
+      authDomain: "tuesa-oficial.firebaseapp.com",
+      projectId: "tuesa-oficial",
+      storageBucket: "tuesa-oficial.firebasestorage.app",
+      messagingSenderId: "447951557213",
+      appId: "1:447951557213:web:293e062ae3fe474c1cb3b4"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    const DIAS = ['LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES'];
+
+    const DEFAULT_DIAS = {
+      LUNES:     ['Mía',       'Pedro',     'Pedro', 'Mía',   'Ayelen', 'Ayelen', 'Mía',   'Pedro'],
+      MARTES:    ['Lucía',     'Lucía',     'Lucía', 'Lucía', 'Ayelen', 'Pedro',  'Ayelen','Mía'],
+      MIERCOLES: ['Pedro',     'Mía',       'Mía',   'Pedro', 'Pedro',  'Mía',    'Ayelen','Pedro'],
+      JUEVES:    ['Pedro',     'Pedro',     'Pedro', 'Pedro', 'X',      'Mía',    'Pedro', 'Ayelen'],
+      VIERNES:   ['Mía/Pedro', 'Pedro/Mía', 'Mía',   'Pedro', 'X',      'X',      'X',     'X']
+    };
+
+    document.getElementById('preview').textContent = JSON.stringify(DEFAULT_DIAS, null, 2);
+
+    function mostrarEstado(msg, clase) {
+      const el = document.getElementById('estado');
+      el.textContent = msg;
+      el.className = 'visible ' + (clase || '');
+    }
+
+    async function crearEstructura() {
+      mostrarEstado('Creando documento...', '');
+      try {
+        await db.collection('tustareas').doc('dias').set(DEFAULT_DIAS);
+        mostrarEstado('Documento "dias" creado/restaurado correctamente.', 'ok');
+      } catch (e) {
+        mostrarEstado('Error: ' + e.message, 'error');
+      }
+    }
+
+    async function verificar() {
+      mostrarEstado('Consultando...', '');
+      try {
+        const snap = await db.collection('tustareas').doc('dias').get();
+        if (snap.exists) {
+          mostrarEstado(
+            'El documento existe. Contenido:\n' + JSON.stringify(snap.data(), null, 2),
+            'ok'
+          );
+        } else {
+          mostrarEstado('El documento NO existe todavía.', 'error');
+        }
+      } catch (e) {
+        mostrarEstado('Error: ' + e.message, 'error');
+      }
+    }
+
+    async function borrar() {
+      if (!confirm('¿Borrar el documento "dias"? La app volverá a usar los valores por defecto.')) return;
+      mostrarEstado('Borrando...', '');
+      try {
+        await db.collection('tustareas').doc('dias').delete();
+        mostrarEstado('Documento eliminado.', 'ok');
+      } catch (e) {
+        mostrarEstado('Error: ' + e.message, 'error');
+      }
+    }
+  </script>
+
+</body>
+</html>

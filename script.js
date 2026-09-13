@@ -3,7 +3,7 @@
    ============================================================ */
 
 /* ------------------------------------------------------------
-   1. DATOS
+   1. DATOS POR DEFECTO
    ------------------------------------------------------------ */
 
 const TAREAS = {
@@ -19,7 +19,7 @@ const TAREAS = {
 
 const DIAS = ['LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES'];
 
-const ASIGNACION = {
+const ASIGNACION_DEFAULT = {
   LUNES:     ['Mía',       'Pedro',     'Pedro', 'Mía',   'Ayelen', 'Ayelen', 'Mía',   'Pedro'],
   MARTES:    ['Lucía',     'Lucía',     'Lucía', 'Lucía', 'Ayelen', 'Pedro',  'Ayelen','Mía'],
   MIERCOLES: ['Pedro',     'Mía',       'Mía',   'Pedro', 'Pedro',  'Mía',    'Ayelen','Pedro'],
@@ -27,12 +27,30 @@ const ASIGNACION = {
   VIERNES:   ['Mía/Pedro', 'Pedro/Mía', 'Mía',   'Pedro', 'X',      'X',      'X',     'X']
 };
 
-const USUARIOS = [...new Set(
-  DIAS
-    .flatMap(dia => ASIGNACION[dia])
-    .filter(celda => celda !== 'X')
-    .flatMap(celda => celda.split('/'))
-)].sort((a, b) => a.localeCompare(b, 'es'));
+/* Asignación vigente en memoria. Empieza con los defaults y se reemplaza
+   cuando se carga el documento "dias" desde Firestore. */
+let asignacionActual = clonarAsignacion(ASIGNACION_DEFAULT);
+
+function clonarAsignacion(obj) {
+  const copia = {};
+  for (const dia of DIAS) copia[dia] = [...(obj[dia] || ASIGNACION_DEFAULT[dia])];
+  return copia;
+}
+
+/* Lista de usuarios válidos (se calcula desde los defaults + la actual) */
+function calcularUsuarios() {
+  const set = new Set();
+  for (const dia of DIAS) {
+    const fila = asignacionActual[dia] || [];
+    fila.forEach(celda => {
+      if (!celda || String(celda).toUpperCase() === 'X') return;
+      String(celda).split('/').forEach(n => set.add(n.trim()));
+    });
+  }
+  return [...set].sort((a, b) => a.localeCompare(b, 'es'));
+}
+
+let USUARIOS = calcularUsuarios();
 
 const USUARIO_ADMIN = 'Pedro';
 
@@ -57,9 +75,7 @@ function obtenerDb() {
       console.error('Firebase SDK no está cargado.');
       return null;
     }
-    if (!firebase.apps.length) {
-      firebase.initializeApp(firebaseConfig);
-    }
+    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
     if (!_db) _db = firebase.firestore();
     return _db;
   } catch (e) {
@@ -81,6 +97,7 @@ const CHEQUEO_MS        = 30 * 1000;
 
 const COLECCION  = 'tustareas';
 const DOC_ULTIMA = 'ultima_revision';
+const DOC_DIAS   = 'dias';
 
 /* ------------------------------------------------------------
    4. UTILIDADES
@@ -108,19 +125,28 @@ function nombreDia(fecha = new Date()) {
 function buscarUsuario(entrada) {
   const buscado = normalizar(entrada);
   if (!buscado) return null;
+  // Recalcular por si cambiaron los usuarios desde el editor
+  USUARIOS = calcularUsuarios();
   return USUARIOS.find(u => normalizar(u) === buscado) || null;
 }
 
+function esCeldaVacia(celda) {
+  return !celda || String(celda).toUpperCase() === 'X';
+}
+
 function tareasDeUsuario(usuario, fecha = new Date()) {
-  const fila = ASIGNACION[nombreDia(fecha)];
+  const fila = asignacionActual[nombreDia(fecha)];
   if (!fila) return [];
+
   const objetivo = normalizar(usuario);
   const resultado = [];
+
   fila.forEach((celda, indice) => {
-    if (celda === 'X') return;
-    const asignados = celda.split('/').map(normalizar);
+    if (esCeldaVacia(celda)) return;
+    const asignados = String(celda).split('/').map(normalizar);
     if (asignados.includes(objetivo)) resultado.push(TAREAS[indice + 1]);
   });
+
   return resultado;
 }
 
@@ -147,7 +173,9 @@ function leerSesion() {
     if (!bruto) return null;
     const datos = JSON.parse(bruto);
     if (!datos || !datos.usuario) return null;
-    if (!USUARIOS.includes(datos.usuario)) return null;
+    // Verificar contra la lista dinámica
+    const lista = calcularUsuarios();
+    if (!lista.includes(datos.usuario)) return null;
     return datos;
   } catch (e) { return null; }
 }
@@ -157,7 +185,60 @@ function borrarSesion() {
 }
 
 /* ------------------------------------------------------------
-   6. DOM
+   6. CARGA Y GUARDADO DE ASIGNACIONES EN FIRESTORE
+   ------------------------------------------------------------ */
+
+/**
+ * Carga el documento "dias" desde Firestore y actualiza asignacionActual.
+ * Devuelve true si se cargó, false si no existe o hubo error.
+ */
+async function cargarAsignaciones() {
+  const db = obtenerDb();
+  if (!db) {
+    console.warn('[dias] Sin conexión a Firestore, usando valores por defecto.');
+    return false;
+  }
+
+  try {
+    const snap = await db.collection(COLECCION).doc(DOC_DIAS).get();
+    if (!snap.exists) {
+      console.info('[dias] El documento no existe, usando defaults.');
+      return false;
+    }
+
+    const data = snap.data();
+    const nueva = {};
+
+    for (const dia of DIAS) {
+      const fila = data[dia];
+      if (Array.isArray(fila) && fila.length === 8) {
+        nueva[dia] = fila.map(v => v == null ? 'X' : String(v));
+      } else {
+        console.warn(`[dias] El día ${dia} es inválido, usando default.`);
+        nueva[dia] = [...ASIGNACION_DEFAULT[dia]];
+      }
+    }
+
+    asignacionActual = nueva;
+    USUARIOS = calcularUsuarios();
+    console.info('[dias] Asignaciones cargadas desde Firestore.');
+    return true;
+
+  } catch (e) {
+    console.error('[dias] Error al cargar:', e);
+    return false;
+  }
+}
+
+/** Guarda asignacionActual (o el objeto pasado) en Firestore. */
+async function guardarAsignaciones(data) {
+  const db = obtenerDb();
+  if (!db) throw new Error('Sin conexión a Firestore.');
+  await db.collection(COLECCION).doc(DOC_DIAS).set(data);
+}
+
+/* ------------------------------------------------------------
+   7. DOM
    ------------------------------------------------------------ */
 
 const tabsEl        = document.getElementById('tabs');
@@ -181,13 +262,17 @@ const tabla        = document.getElementById('tareas-table');
 const hoyTitulo    = document.getElementById('hoy-titulo');
 const hoyLista     = document.getElementById('hoy-lista');
 
-const btnAdminRev  = document.getElementById('btn-solicitar-revision');
-const adminEstado  = document.getElementById('admin-estado');
+const btnAdminRev    = document.getElementById('btn-solicitar-revision');
+const adminEstado    = document.getElementById('admin-estado');
+const adminEditor    = document.getElementById('admin-editor');
+const btnGuardarEd   = document.getElementById('btn-guardar-editor');
+const btnRevertirEd  = document.getElementById('btn-revertir-editor');
+const editorEstado   = document.getElementById('editor-estado');
 
 const toastContainer = document.getElementById('toast-container');
 
 /* ------------------------------------------------------------
-   7. PESTAÑAS
+   8. PESTAÑAS
    ------------------------------------------------------------ */
 
 function posicionarIndicador(animar = true) {
@@ -210,22 +295,19 @@ function posicionarIndicador(animar = true) {
 }
 
 function activarTab(nombre, animar = true) {
-  console.log('[activarTab]', nombre);
-
   botonesTab.forEach(b => b.classList.toggle('active', b.dataset.tab === nombre));
 
   Object.entries(paneles).forEach(([clave, el]) => {
     if (el) el.classList.toggle('active', clave === nombre);
   });
 
-  // [FIX] Doble rAF: en móviles el layout a veces necesita más de un frame
   requestAnimationFrame(() => {
     requestAnimationFrame(() => posicionarIndicador(animar));
   });
 }
 
 /* ------------------------------------------------------------
-   8. RENDERIZADO
+   9. RENDERIZADO DE LA TABLA Y DE "HOY"
    ------------------------------------------------------------ */
 
 function renderTabla(usuarioActual = null) {
@@ -237,13 +319,19 @@ function renderTabla(usuarioActual = null) {
 
   for (const dia of DIAS) {
     html += `<tr><th class="col-dia" scope="row">${dia}</th>`;
-    for (const celda of ASIGNACION[dia]) {
-      if (celda === 'X') { html += '<td class="celda-vacia">—</td>'; continue; }
-      const esMia = objetivo && celda.split('/').map(normalizar).includes(objetivo);
+    const fila = asignacionActual[dia] || ASIGNACION_DEFAULT[dia];
+
+    for (const celda of fila) {
+      if (esCeldaVacia(celda)) {
+        html += '<td class="celda-vacia">—</td>';
+        continue;
+      }
+      const esMia = objetivo && String(celda).split('/').map(normalizar).includes(objetivo);
       html += `<td class="${esMia ? 'celda-mia' : ''}">${celda}</td>`;
     }
     html += '</tr>';
   }
+
   html += '</tbody>';
   tabla.innerHTML = html;
 }
@@ -255,12 +343,14 @@ function renderHoy(usuario) {
     hoyLista.innerHTML = '<p class="vacio">Iniciá sesión para ver tus tareas de hoy.</p>';
     return;
   }
+
   const tareas = tareasDeUsuario(usuario);
   if (tareas.length === 0) {
     hoyTitulo.textContent = `Hoy, ${usuario}, no tenés tareas`;
     hoyLista.innerHTML = '<p class="vacio">Disfrutá el día libre.</p>';
     return;
   }
+
   hoyTitulo.textContent = `Hoy te toca, ${usuario}`;
   tareas.forEach(t => {
     const li = document.createElement('li');
@@ -270,7 +360,7 @@ function renderHoy(usuario) {
 }
 
 /* ------------------------------------------------------------
-   9. PESTAÑA PANEL ADMIN
+   10. PANEL ADMIN — visibilidad
    ------------------------------------------------------------ */
 
 function actualizarTabAdmin(usuario) {
@@ -278,23 +368,132 @@ function actualizarTabAdmin(usuario) {
   if (!btnAdmin) return;
 
   const mostrar = usuario && esAdmin(usuario);
-  console.log('[actualizarTabAdmin]', usuario, 'mostrar=', mostrar);
 
   if (mostrar) {
     btnAdmin.classList.remove('hidden');
     btnAdmin.disabled = false;
+    renderEditorAdmin();
   } else {
     if (btnAdmin.classList.contains('active')) activarTab('inicio');
     btnAdmin.classList.add('hidden');
     btnAdmin.disabled = true;
   }
 
-  // [FIX] Reposicionar tras el reflow, no antes
   setTimeout(() => posicionarIndicador(), 60);
 }
 
 /* ------------------------------------------------------------
-   10. TOASTS
+   11. EDITOR DE ASIGNACIONES
+   ------------------------------------------------------------ */
+
+function renderEditorAdmin() {
+  if (!adminEditor) return;
+
+  let html = '<table class="editor-tabla"><thead><tr><th>DÍA</th>';
+  for (let i = 1; i <= 8; i++) html += `<th>T${i}</th>`;
+  html += '</tr></thead><tbody>';
+
+  for (const dia of DIAS) {
+    const fila = asignacionActual[dia] || ASIGNACION_DEFAULT[dia];
+    html += `<tr><th scope="row">${dia}</th>`;
+
+    for (let i = 0; i < 8; i++) {
+      const valor = fila[i] != null ? String(fila[i]) : 'X';
+      const claseX = esCeldaVacia(valor) ? 'celda-x' : '';
+      const escape = valor.replace(/"/g, '&quot;');
+      html += `<td>
+        <input type="text"
+               list="usuarios-datalist"
+               value="${escape}"
+               data-dia="${dia}"
+               data-idx="${i}"
+               class="${claseX}"
+               spellcheck="false"
+               autocomplete="off">
+      </td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table>';
+
+  adminEditor.innerHTML = html;
+
+  // Marcar visualmente las celdas X y actualizar la clase al escribir
+  adminEditor.querySelectorAll('input[data-dia]').forEach(inp => {
+    inp.addEventListener('input', () => {
+      const v = inp.value.trim();
+      inp.classList.toggle('celda-x', esCeldaVacia(v));
+    });
+  });
+}
+
+/** Recolecta los valores del editor y devuelve un objeto { DIA: [8 valores] }. */
+function recolectarEditor() {
+  const inputs = adminEditor.querySelectorAll('input[data-dia]');
+  const nueva = clonarAsignacion(asignacionActual);
+
+  inputs.forEach(inp => {
+    const dia = inp.dataset.dia;
+    const idx = parseInt(inp.dataset.idx, 10);
+    let valor = inp.value.trim();
+    if (!valor || valor.toUpperCase() === 'X') valor = 'X';
+    if (nueva[dia]) nueva[dia][idx] = valor;
+  });
+
+  return nueva;
+}
+
+async function guardarCambiosEditor() {
+  if (editorEstado) {
+    editorEstado.textContent = 'Guardando cambios...';
+    editorEstado.className = 'admin-estado';
+  }
+
+  const nueva = recolectarEditor();
+
+  try {
+    await guardarAsignaciones(nueva);
+    asignacionActual = nueva;
+    USUARIOS = calcularUsuarios();
+
+    // Re-renderizar la tabla y "hoy" con los datos nuevos
+    const sesion = leerSesion();
+    if (sesion) {
+      renderTabla(sesion.usuario);
+      renderHoy(sesion.usuario);
+    }
+
+    if (editorEstado) {
+      editorEstado.textContent = 'Cambios guardados correctamente.';
+      editorEstado.className = 'admin-estado ok';
+      setTimeout(() => {
+        editorEstado.textContent = '';
+        editorEstado.className = 'admin-estado';
+      }, 4000);
+    }
+  } catch (e) {
+    console.error('Error guardando asignaciones:', e);
+    if (editorEstado) {
+      editorEstado.textContent = 'Error: ' + (e.message || e);
+      editorEstado.className = 'admin-estado error';
+    }
+  }
+}
+
+function revertirEditor() {
+  renderEditorAdmin();
+  if (editorEstado) {
+    editorEstado.textContent = 'Cambios locales descartados.';
+    editorEstado.className = 'admin-estado';
+    setTimeout(() => {
+      editorEstado.textContent = '';
+      editorEstado.className = 'admin-estado';
+    }, 3000);
+  }
+}
+
+/* ------------------------------------------------------------
+   12. TOASTS
    ------------------------------------------------------------ */
 
 function mostrarToast(titulo, cuerpo, duracion = 8000) {
@@ -326,7 +525,7 @@ function mostrarToast(titulo, cuerpo, duracion = 8000) {
 }
 
 /* ------------------------------------------------------------
-   11. AUDIO
+   13. AUDIO
    ------------------------------------------------------------ */
 
 let _audioPendiente = null;
@@ -352,7 +551,6 @@ function reproducirSonidoNotificacion() {
   } catch (e) { console.warn('No se pudo reproducir el sonido:', e); }
 }
 
-// [FIX] Desbloquear audio en el primer toque (iOS/Safari y algunos Android)
 function desbloquearAudio() {
   try {
     const audio = new Audio('notificacion.mp3');
@@ -365,7 +563,7 @@ function desbloquearAudio() {
 }
 
 /* ------------------------------------------------------------
-   12. PERMISO DE NOTIFICACIONES
+   14. PERMISO DE NOTIFICACIONES
    ------------------------------------------------------------ */
 
 function permisoConcedido() {
@@ -373,39 +571,22 @@ function permisoConcedido() {
 }
 
 async function pedirPermisoNotificaciones() {
-  if (typeof Notification === 'undefined') {
-    console.warn('Este navegador no soporta Notification API.');
-    return false;
-  }
+  if (typeof Notification === 'undefined') return false;
   if (Notification.permission === 'granted') return true;
-  if (Notification.permission === 'denied') {
-    console.warn('El permiso de notificaciones fue denegado previamente.');
-    return false;
-  }
+  if (Notification.permission === 'denied') return false;
   try {
     const resultado = await Notification.requestPermission();
-    console.log('[permiso notificaciones]', resultado);
     return resultado === 'granted';
-  } catch (e) {
-    console.warn('No se pudo pedir permiso de notificaciones:', e);
-    return false;
-  }
+  } catch (e) { return false; }
 }
 
-/* ------------------------------------------------------------
-   13. SERVICE WORKER READY
-   ------------------------------------------------------------ */
-
-// [FIX] Esperar a que el SW esté activo antes de usarlo para notificar
 async function esperarServiceWorker(timeoutMs = 6000) {
   if (!('serviceWorker' in navigator)) return null;
-
   const yaListo = await navigator.serviceWorker.getRegistration();
   if (yaListo && yaListo.active) return yaListo;
 
   return new Promise(resolve => {
     const timeout = setTimeout(() => resolve(null), timeoutMs);
-
     navigator.serviceWorker.ready.then(reg => {
       clearTimeout(timeout);
       resolve(reg);
@@ -417,7 +598,7 @@ async function esperarServiceWorker(timeoutMs = 6000) {
 }
 
 /* ------------------------------------------------------------
-   14. REVISIÓN PENDIENTE
+   15. REVISIÓN PENDIENTE
    ------------------------------------------------------------ */
 
 async function revisionpendiente() {
@@ -425,10 +606,7 @@ async function revisionpendiente() {
   if (!sesion) return;
 
   const db = obtenerDb();
-  if (!db) {
-    console.warn('revisionpendiente: sin acceso a Firebase.');
-    return;
-  }
+  if (!db) { console.warn('revisionpendiente: sin acceso a Firebase.'); return; }
 
   try {
     const ultimaSnap = await db.collection(COLECCION).doc(DOC_ULTIMA).get();
@@ -452,11 +630,7 @@ async function revisionpendiente() {
       if (normalizar(clave) === usuarioNorm) { valor = val; break; }
     }
 
-    console.log('[revisionpendiente] rev=', numeroRev, 'valor usuario=', valor);
-
-    if (valor === false) {
-      await mostrarNotificacionRevision(numeroRev);
-    }
+    if (valor === false) await mostrarNotificacionRevision(numeroRev);
   } catch (e) {
     console.error('Error en revisionpendiente:', e);
   }
@@ -466,21 +640,12 @@ async function mostrarNotificacionRevision(numeroRev) {
   const titulo = 'Prueba de Notificacion - Tus Tareas';
   const cuerpo = `Esta es una prueba para comprobar que el sistema ande bien (revision "${numeroRev}")`;
 
-  // Sonido
   reproducirSonidoNotificacion();
-
-  // Toast interno (siempre aparece)
   mostrarToast(titulo, cuerpo, 12000);
 
-  // Notificación nativa
-  if (!permisoConcedido()) {
-    console.warn('Sin permiso de notificaciones. Solo se muestra el toast interno.');
-    return;
-  }
+  if (!permisoConcedido()) return;
 
-  // [FIX] Esperar al SW antes de notificar
   const reg = await esperarServiceWorker();
-
   try {
     const opciones = {
       body: cuerpo,
@@ -489,22 +654,15 @@ async function mostrarNotificacionRevision(numeroRev) {
       tag: 'tustareas-revision-' + numeroRev,
       requireInteraction: true
     };
-
-    if (reg) {
-      await reg.showNotification(titulo, opciones);
-      console.log('[notificación] mostrada vía SW');
-    } else {
-      // Fallback: algunos navegadores móviles permiten new Notification directo
-      new Notification(titulo, opciones);
-      console.log('[notificación] mostrada vía new Notification (fallback)');
-    }
+    if (reg) await reg.showNotification(titulo, opciones);
+    else new Notification(titulo, opciones);
   } catch (e) {
     console.error('No se pudo mostrar la notificación nativa:', e);
   }
 }
 
 /* ------------------------------------------------------------
-   15. SOLICITAR REVISIÓN
+   16. SOLICITAR REVISIÓN
    ------------------------------------------------------------ */
 
 async function solicitarRevision() {
@@ -564,7 +722,7 @@ async function solicitarRevision() {
 }
 
 /* ------------------------------------------------------------
-   16. LOGIN / LOGOUT
+   17. LOGIN / LOGOUT
    ------------------------------------------------------------ */
 
 function mostrarError(mensaje) {
@@ -580,7 +738,6 @@ function ocultarError() {
 }
 
 function iniciarSesion(usuario) {
-  console.log('[iniciarSesion]', usuario);
   userChip.textContent = usuario;
 
   renderTabla(usuario);
@@ -629,7 +786,7 @@ function manejarLogin(evento) {
 
   const usuario = buscarUsuario(valor);
   if (!usuario) {
-    mostrarError(`No encontramos a "${valor}". Probá con Mía, Pedro, Ayelen o Lucía.`);
+    mostrarError(`No encontramos a "${valor}". Probá con otro nombre.`);
     return;
   }
 
@@ -639,7 +796,7 @@ function manejarLogin(evento) {
 }
 
 /* ------------------------------------------------------------
-   17. NOTIFICACIONES DIARIAS (tareas)
+   18. NOTIFICACIONES DIARIAS
    ------------------------------------------------------------ */
 
 let reintentarDesde = 0;
@@ -668,11 +825,8 @@ async function enviarNotificacion(clave) {
 
   try {
     const reg = await esperarServiceWorker();
-    if (reg) {
-      await reg.showNotification('TusTareas', opciones);
-    } else {
-      new Notification('TusTareas', opciones);
-    }
+    if (reg) await reg.showNotification('TusTareas', opciones);
+    else new Notification('TusTareas', opciones);
     localStorage.setItem(STORAGE_NOTIF, clave);
     return true;
   } catch (e) {
@@ -711,45 +865,38 @@ function iniciarSistemaNotificaciones() {
 }
 
 /* ------------------------------------------------------------
-   18. SERVICE WORKER
+   19. SERVICE WORKER
    ------------------------------------------------------------ */
 
 function registrarServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').then(() => {
-      console.log('[SW] registrado');
-    }).catch(err => {
+    navigator.serviceWorker.register('sw.js').catch(err => {
       console.warn('No se pudo registrar el Service Worker:', err);
     });
   });
 }
 
 /* ------------------------------------------------------------
-   19. INICIALIZACIÓN
+   20. INICIALIZACIÓN
    ------------------------------------------------------------ */
 
 function init() {
-  console.log('[init] TusTareas');
-  console.log('[init] Notification:', typeof Notification !== 'undefined' ? Notification.permission : 'no soportado');
-  console.log('[init] SW:', 'serviceWorker' in navigator);
-
   renderTabla(null);
   renderHoy(null);
 
   formLogin.addEventListener('submit', manejarLogin);
   btnLogout.addEventListener('click', cerrarSesion);
 
-  if (btnAdminRev) {
-    btnAdminRev.addEventListener('click', solicitarRevision);
-  }
+  if (btnAdminRev)   btnAdminRev.addEventListener('click', solicitarRevision);
+  if (btnGuardarEd)  btnGuardarEd.addEventListener('click', guardarCambiosEditor);
+  if (btnRevertirEd) btnRevertirEd.addEventListener('click', revertirEditor);
 
   inputUsuario.addEventListener('input', () => {
     if (errorLogin.classList.contains('show')) ocultarError();
   });
 
   botonesTab.forEach(boton => {
-    // [FIX] pointerup + click para máxima compatibilidad en táctil
     boton.addEventListener('click', (ev) => {
       ev.preventDefault();
       if (boton.disabled) return;
@@ -757,7 +904,6 @@ function init() {
     });
   });
 
-  // [FIX] Pedir permiso de notificaciones y desbloquear audio en el primer toque
   const primerToque = async () => {
     desbloquearAudio();
     if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
@@ -774,7 +920,19 @@ function init() {
     document.fonts.ready.then(() => posicionarIndicador(false));
   }
 
-  /* ---- AUTO-LOGIN ---- */
+  /* ---- Cargar asignaciones desde Firestore en background ---- */
+  cargarAsignaciones().then(() => {
+    // Cuando termina la carga (con éxito o no), re-renderizamos con los
+    // datos definitivos y refrescamos el editor si Pedro está logueado.
+    const sesion = leerSesion();
+    if (sesion) {
+      renderTabla(sesion.usuario);
+      renderHoy(sesion.usuario);
+      if (esAdmin(sesion.usuario)) renderEditorAdmin();
+    }
+  });
+
+  /* ---- Auto-login con los datos disponibles (defaults) ---- */
   const sesion = leerSesion();
   if (sesion) {
     iniciarSesion(sesion.usuario);

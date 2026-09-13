@@ -521,6 +521,115 @@ td.celda-vacia { color: #c9cbdb; }
   display: none;
 }
 
+/* ============================================================
+   Editor de asignaciones (panel admin)
+   ============================================================ */
+
+.editor-wrap {
+  margin: 14px 0 16px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: #fff;
+  overflow-x: auto;
+  overflow-y: hidden;
+  box-shadow: 0 10px 30px -24px rgba(35, 25, 90, .5);
+}
+
+.editor-cargando {
+  margin: 0;
+  padding: 22px;
+  text-align: center;
+  color: var(--muted);
+  font-size: .9rem;
+}
+
+.editor-tabla {
+  width: 100%;
+  min-width: 820px;
+  border-collapse: collapse;
+  font-size: .85rem;
+}
+
+.editor-tabla thead th {
+  padding: 10px 6px;
+  font-size: .68rem;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: #4a4d6b;
+  background: linear-gradient(180deg, #f8f9ff, #eef0ff);
+  border-bottom: 1px solid var(--line);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.editor-tabla thead th:first-child {
+  text-align: left;
+  padding-left: 14px;
+  min-width: 110px;
+}
+
+.editor-tabla tbody th {
+  padding: 10px 12px;
+  text-align: left;
+  font-size: .72rem;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: #4a4d6b;
+  background: #f8f9ff;
+  border-bottom: 1px solid #f1f2f9;
+}
+
+.editor-tabla tbody td {
+  padding: 5px 4px;
+  border-bottom: 1px solid #f1f2f9;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.editor-tabla tbody tr:last-child td,
+.editor-tabla tbody tr:last-child th {
+  border-bottom: 0;
+}
+
+.editor-tabla input {
+  width: 100%;
+  min-width: 88px;
+  padding: 7px 9px;
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+  font: inherit;
+  font-size: .82rem;
+  background: #fbfbfe;
+  color: var(--ink);
+  text-align: center;
+  transition: border-color .2s, background .2s, box-shadow .2s;
+}
+
+.editor-tabla input:focus {
+  outline: none;
+  border-color: var(--primary);
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(91, 91, 214, .14);
+}
+
+.editor-tabla input.celda-x {
+  color: #c0c2d4;
+  font-weight: 700;
+}
+
+.admin-bloque .btn-ghost {
+  margin-left: 8px;
+  padding: 13px 22px;
+}
+
+@media (max-width: 620px) {
+  .editor-tabla { min-width: 720px; }
+  .editor-tabla input { min-width: 78px; padding: 6px 6px; font-size: .78rem; }
+  .admin-bloque .btn-ghost { margin-left: 0; margin-top: 8px; display: block; width: 100%; }
+}
+
 /* El indicador nunca debe capturar clicks */
 .tab-indicator {
   pointer-events: none !important;

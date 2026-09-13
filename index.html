@@ -95,12 +95,13 @@
       </div>
     </section>
 
-    <!-- ================= PANEL ADMIN ================= -->
+        <!-- ================= PANEL ADMIN ================= -->
     <section class="panel" id="panel-panel-admin">
       <div class="card admin-card">
         <h2 class="card-title">Panel admin</h2>
-        <p class="card-sub">Herramientas de administración de revisiones</p>
+        <p class="card-sub">Herramientas de administración de revisiones y tareas</p>
 
+        <!-- Bloque 1: Solicitar revisión -->
         <div class="admin-bloque">
           <h3 class="admin-sub">Solicitar nueva revisión</h3>
           <p class="admin-desc">
@@ -110,13 +111,44 @@
           <button class="btn btn-primary" id="btn-solicitar-revision" type="button">
             Solicitar revisión
           </button>
+          <p class="admin-estado" id="admin-estado"></p>
         </div>
 
-        <p class="admin-estado" id="admin-estado"></p>
+        <!-- Bloque 2: Editor de asignaciones -->
+        <div class="admin-bloque">
+          <h3 class="admin-sub">Editar asignación de tareas</h3>
+          <p class="admin-desc">
+            Modificá quién tiene cada tarea en cada día. Podés escribir varios
+            usuarios separados por "/" (ej: "Mía/Pedro") o una "X" para marcar
+            el día como sin tarea asignada.
+          </p>
+
+          <div id="admin-editor" class="editor-wrap">
+            <p class="editor-cargando">Cargando asignaciones...</p>
+          </div>
+
+          <button class="btn btn-primary" id="btn-guardar-editor" type="button">
+            Guardar cambios
+          </button>
+          <button class="btn btn-ghost" id="btn-revertir-editor" type="button">
+            Revertir cambios
+          </button>
+          <p class="admin-estado" id="editor-estado"></p>
+        </div>
+
       </div>
     </section>
 
-  </main>
+    <!-- Datalist para sugerencias del editor -->
+    <datalist id="usuarios-datalist">
+      <option value="X"></option>
+      <option value="Mía"></option>
+      <option value="Pedro"></option>
+      <option value="Ayelen"></option>
+      <option value="Lucía"></option>
+      <option value="Mía/Pedro"></option>
+      <option value="Pedro/Mía"></option>
+    </datalist>
 
   <!-- Contenedor de notificaciones internas -->
   <div class="toast-container" id="toast-container" aria-live="polite"></div>
