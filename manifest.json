@@ -1,0 +1,44 @@
+{
+  "name": "TusTareas",
+  "short_name": "TusTareas",
+  "description": "Organizá las tareas de la casa y mirá qué te toca cada día.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f4f5fb",
+  "theme_color": "#5b5bd6",
+  "lang": "es",
+  "icons": [
+    {
+      "src": "TusTareas.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "TusTareas.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "TusTareas.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "TusTareas.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "TusTareas.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

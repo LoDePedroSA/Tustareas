@@ -61,3 +61,5 @@ Boton (arriba a la izquierda): {
 Tabla: la tabla de usuario haciendo los siguientes cambios {
     1. "TAREA #" se remplaza por el nombre de esa tarea.
 }
+
+Recorda pasarme el codigo completo de los 3 archivos: "index.html", "styles.css" y "script.js"

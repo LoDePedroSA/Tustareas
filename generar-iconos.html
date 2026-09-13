@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Generar iconos TusTareas</title>
+<style>
+  body { font-family: system-ui, sans-serif; padding: 40px; background: #f4f5fb; color: #17182b; }
+  h1 { margin-top: 0; }
+  button {
+    display: block; margin: 12px 0; padding: 14px 24px;
+    border: 0; border-radius: 12px; cursor: pointer;
+    background: linear-gradient(120deg, #5b5bd6, #8b5cf6);
+    color: #fff; font-size: 1rem; font-weight: 600;
+  }
+  button:hover { transform: translateY(-2px); }
+  p { color: #555; line-height: 1.5; }
+</style>
+</head>
+<body>
+  <h1>Generar iconos para TusTareas</h1>
+  <p>Hacé click en cada botón. Se van a descargar dos archivos PNG.<br>
+  Guardalos en la misma carpeta del proyecto, junto a index.html.</p>
+
+  <button onclick="descargar(192)">Descargar icon-192.png</button>
+  <button onclick="descargar(512)">Descargar icon-512.png</button>
+
+<script>
+function descargar(tamano) {
+  const c = document.createElement('canvas');
+  c.width = c.height = tamano;
+  const ctx = c.getContext('2d');
+  const r = tamano * 0.22;
+
+  // Fondo con gradiente (esquinas redondeadas)
+  const grad = ctx.createLinearGradient(0, 0, tamano, tamano);
+  grad.addColorStop(0, '#5b5bd6');
+  grad.addColorStop(1, '#8b5cf6');
+
+  ctx.beginPath();
+  ctx.moveTo(r, 0);
+  ctx.lineTo(tamano - r, 0);
+  ctx.quadraticCurveTo(tamano, 0, tamano, r);
+  ctx.lineTo(tamano, tamano - r);
+  ctx.quadraticCurveTo(tamano, tamano, tamano - r, tamano);
+  ctx.lineTo(r, tamano);
+  ctx.quadraticCurveTo(0, tamano, 0, tamano - r);
+  ctx.lineTo(0, r);
+  ctx.quadraticCurveTo(0, 0, r, 0);
+  ctx.closePath();
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Tildecito blanco
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = tamano * 0.075;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(tamano * 0.30, tamano * 0.52);
+  ctx.lineTo(tamano * 0.44, tamano * 0.66);
+  ctx.lineTo(tamano * 0.72, tamano * 0.36);
+  ctx.stroke();
+
+  const link = document.createElement('a');
+  link.download = `icon-${tamano}.png`;
+  link.href = c.toDataURL('image/png');
+  link.click();
+}
+</script>
+</body>
+</html>
