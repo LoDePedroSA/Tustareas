@@ -3,7 +3,7 @@
    ============================================================ */
 
 /* ------------------------------------------------------------
-   1. DATOS POR DEFECTO
+   1. DATOS
    ------------------------------------------------------------ */
 
 const TAREAS = {
@@ -19,6 +19,7 @@ const TAREAS = {
 
 const DIAS = ['LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES'];
 
+/* [NUEVO] Valores por defecto: se usan si Firestore no responde o está vacío */
 const ASIGNACION_DEFAULT = {
   LUNES:     ['Mía',       'Pedro',     'Pedro', 'Mía',   'Ayelen', 'Ayelen', 'Mía',   'Pedro'],
   MARTES:    ['Lucía',     'Lucía',     'Lucía', 'Lucía', 'Ayelen', 'Pedro',  'Ayelen','Mía'],
@@ -27,30 +28,24 @@ const ASIGNACION_DEFAULT = {
   VIERNES:   ['Mía/Pedro', 'Pedro/Mía', 'Mía',   'Pedro', 'X',      'X',      'X',     'X']
 };
 
-/* Asignación vigente en memoria. Empieza con los defaults y se reemplaza
-   cuando se carga el documento "dias" desde Firestore. */
-let asignacionActual = clonarAsignacion(ASIGNACION_DEFAULT);
+/* [NUEVO] Ahora es mutable: se reemplaza con lo que venga de Firestore */
+let ASIGNACION = JSON.parse(JSON.stringify(ASIGNACION_DEFAULT));
 
-function clonarAsignacion(obj) {
-  const copia = {};
-  for (const dia of DIAS) copia[dia] = [...(obj[dia] || ASIGNACION_DEFAULT[dia])];
-  return copia;
-}
+/* [NUEVO] Lista de usuarios válidos (se recalcula al cargar la asignación) */
+let USUARIOS = [];
 
-/* Lista de usuarios válidos (se calcula desde los defaults + la actual) */
-function calcularUsuarios() {
+function recalcularUsuarios() {
   const set = new Set();
-  for (const dia of DIAS) {
-    const fila = asignacionActual[dia] || [];
-    fila.forEach(celda => {
-      if (!celda || String(celda).toUpperCase() === 'X') return;
-      String(celda).split('/').forEach(n => set.add(n.trim()));
+  DIAS.forEach(dia => {
+    (ASIGNACION[dia] || []).forEach(celda => {
+      if (celda && celda !== 'X') {
+        celda.split('/').forEach(n => set.add(n.trim()));
+      }
     });
-  }
-  return [...set].sort((a, b) => a.localeCompare(b, 'es'));
+  });
+  USUARIOS = [...set].sort((a, b) => a.localeCompare(b, 'es'));
 }
-
-let USUARIOS = calcularUsuarios();
+recalcularUsuarios();
 
 const USUARIO_ADMIN = 'Pedro';
 
@@ -84,6 +79,41 @@ function obtenerDb() {
   }
 }
 
+/* [NUEVO] Carga la asignación desde Firestore. Devuelve true si encontró datos. */
+async function cargarAsignacionDesdeFirestore() {
+  const db = obtenerDb();
+  if (!db) return false;
+
+  try {
+    const snap = await db.collection('dias').get();
+    if (snap.empty) {
+      console.info('[dias] La colección está vacía, usando valores por defecto.');
+      return false;
+    }
+
+    const nueva = {};
+    snap.forEach(doc => {
+      const data = doc.data();
+      if (Array.isArray(data.tareas) && data.tareas.length === 8) {
+        nueva[doc.id.toUpperCase()] = data.tareas;
+      }
+    });
+
+    let encontrados = 0;
+    DIAS.forEach(dia => {
+      if (nueva[dia]) { ASIGNACION[dia] = nueva[dia]; encontrados++; }
+    });
+
+    recalcularUsuarios();
+    console.info(`[dias] Cargados ${encontrados}/5 días desde Firestore.`);
+    return encontrados > 0;
+
+  } catch (e) {
+    console.warn('[dias] Error al cargar desde Firestore:', e);
+    return false;
+  }
+}
+
 /* ------------------------------------------------------------
    3. CONFIGURACIÓN
    ------------------------------------------------------------ */
@@ -97,7 +127,6 @@ const CHEQUEO_MS        = 30 * 1000;
 
 const COLECCION  = 'tustareas';
 const DOC_ULTIMA = 'ultima_revision';
-const DOC_DIAS   = 'dias';
 
 /* ------------------------------------------------------------
    4. UTILIDADES
@@ -125,28 +154,19 @@ function nombreDia(fecha = new Date()) {
 function buscarUsuario(entrada) {
   const buscado = normalizar(entrada);
   if (!buscado) return null;
-  // Recalcular por si cambiaron los usuarios desde el editor
-  USUARIOS = calcularUsuarios();
   return USUARIOS.find(u => normalizar(u) === buscado) || null;
 }
 
-function esCeldaVacia(celda) {
-  return !celda || String(celda).toUpperCase() === 'X';
-}
-
 function tareasDeUsuario(usuario, fecha = new Date()) {
-  const fila = asignacionActual[nombreDia(fecha)];
+  const fila = ASIGNACION[nombreDia(fecha)];
   if (!fila) return [];
-
   const objetivo = normalizar(usuario);
   const resultado = [];
-
   fila.forEach((celda, indice) => {
-    if (esCeldaVacia(celda)) return;
-    const asignados = String(celda).split('/').map(normalizar);
+    if (celda === 'X') return;
+    const asignados = celda.split('/').map(normalizar);
     if (asignados.includes(objetivo)) resultado.push(TAREAS[indice + 1]);
   });
-
   return resultado;
 }
 
@@ -173,9 +193,7 @@ function leerSesion() {
     if (!bruto) return null;
     const datos = JSON.parse(bruto);
     if (!datos || !datos.usuario) return null;
-    // Verificar contra la lista dinámica
-    const lista = calcularUsuarios();
-    if (!lista.includes(datos.usuario)) return null;
+    if (!USUARIOS.includes(datos.usuario)) return null;
     return datos;
   } catch (e) { return null; }
 }
@@ -185,60 +203,7 @@ function borrarSesion() {
 }
 
 /* ------------------------------------------------------------
-   6. CARGA Y GUARDADO DE ASIGNACIONES EN FIRESTORE
-   ------------------------------------------------------------ */
-
-/**
- * Carga el documento "dias" desde Firestore y actualiza asignacionActual.
- * Devuelve true si se cargó, false si no existe o hubo error.
- */
-async function cargarAsignaciones() {
-  const db = obtenerDb();
-  if (!db) {
-    console.warn('[dias] Sin conexión a Firestore, usando valores por defecto.');
-    return false;
-  }
-
-  try {
-    const snap = await db.collection(COLECCION).doc(DOC_DIAS).get();
-    if (!snap.exists) {
-      console.info('[dias] El documento no existe, usando defaults.');
-      return false;
-    }
-
-    const data = snap.data();
-    const nueva = {};
-
-    for (const dia of DIAS) {
-      const fila = data[dia];
-      if (Array.isArray(fila) && fila.length === 8) {
-        nueva[dia] = fila.map(v => v == null ? 'X' : String(v));
-      } else {
-        console.warn(`[dias] El día ${dia} es inválido, usando default.`);
-        nueva[dia] = [...ASIGNACION_DEFAULT[dia]];
-      }
-    }
-
-    asignacionActual = nueva;
-    USUARIOS = calcularUsuarios();
-    console.info('[dias] Asignaciones cargadas desde Firestore.');
-    return true;
-
-  } catch (e) {
-    console.error('[dias] Error al cargar:', e);
-    return false;
-  }
-}
-
-/** Guarda asignacionActual (o el objeto pasado) en Firestore. */
-async function guardarAsignaciones(data) {
-  const db = obtenerDb();
-  if (!db) throw new Error('Sin conexión a Firestore.');
-  await db.collection(COLECCION).doc(DOC_DIAS).set(data);
-}
-
-/* ------------------------------------------------------------
-   7. DOM
+   6. DOM
    ------------------------------------------------------------ */
 
 const tabsEl        = document.getElementById('tabs');
@@ -262,17 +227,17 @@ const tabla        = document.getElementById('tareas-table');
 const hoyTitulo    = document.getElementById('hoy-titulo');
 const hoyLista     = document.getElementById('hoy-lista');
 
-const btnAdminRev    = document.getElementById('btn-solicitar-revision');
-const adminEstado    = document.getElementById('admin-estado');
-const adminEditor    = document.getElementById('admin-editor');
-const btnGuardarEd   = document.getElementById('btn-guardar-editor');
-const btnRevertirEd  = document.getElementById('btn-revertir-editor');
-const editorEstado   = document.getElementById('editor-estado');
+const btnAdminRev  = document.getElementById('btn-solicitar-revision');
+const adminEstado  = document.getElementById('admin-estado');
+
+const editorTbody      = document.getElementById('editor-tbody');
+const btnGuardarAsig   = document.getElementById('btn-guardar-asignacion');
+const editorEstado     = document.getElementById('editor-estado');
 
 const toastContainer = document.getElementById('toast-container');
 
 /* ------------------------------------------------------------
-   8. PESTAÑAS
+   7. PESTAÑAS
    ------------------------------------------------------------ */
 
 function posicionarIndicador(animar = true) {
@@ -296,18 +261,16 @@ function posicionarIndicador(animar = true) {
 
 function activarTab(nombre, animar = true) {
   botonesTab.forEach(b => b.classList.toggle('active', b.dataset.tab === nombre));
-
   Object.entries(paneles).forEach(([clave, el]) => {
     if (el) el.classList.toggle('active', clave === nombre);
   });
-
   requestAnimationFrame(() => {
     requestAnimationFrame(() => posicionarIndicador(animar));
   });
 }
 
 /* ------------------------------------------------------------
-   9. RENDERIZADO DE LA TABLA Y DE "HOY"
+   8. RENDERIZADO
    ------------------------------------------------------------ */
 
 function renderTabla(usuarioActual = null) {
@@ -319,19 +282,13 @@ function renderTabla(usuarioActual = null) {
 
   for (const dia of DIAS) {
     html += `<tr><th class="col-dia" scope="row">${dia}</th>`;
-    const fila = asignacionActual[dia] || ASIGNACION_DEFAULT[dia];
-
-    for (const celda of fila) {
-      if (esCeldaVacia(celda)) {
-        html += '<td class="celda-vacia">—</td>';
-        continue;
-      }
-      const esMia = objetivo && String(celda).split('/').map(normalizar).includes(objetivo);
+    for (const celda of ASIGNACION[dia]) {
+      if (celda === 'X') { html += '<td class="celda-vacia">—</td>'; continue; }
+      const esMia = objetivo && celda.split('/').map(normalizar).includes(objetivo);
       html += `<td class="${esMia ? 'celda-mia' : ''}">${celda}</td>`;
     }
     html += '</tr>';
   }
-
   html += '</tbody>';
   tabla.innerHTML = html;
 }
@@ -343,14 +300,12 @@ function renderHoy(usuario) {
     hoyLista.innerHTML = '<p class="vacio">Iniciá sesión para ver tus tareas de hoy.</p>';
     return;
   }
-
   const tareas = tareasDeUsuario(usuario);
   if (tareas.length === 0) {
     hoyTitulo.textContent = `Hoy, ${usuario}, no tenés tareas`;
     hoyLista.innerHTML = '<p class="vacio">Disfrutá el día libre.</p>';
     return;
   }
-
   hoyTitulo.textContent = `Hoy te toca, ${usuario}`;
   tareas.forEach(t => {
     const li = document.createElement('li');
@@ -360,7 +315,117 @@ function renderHoy(usuario) {
 }
 
 /* ------------------------------------------------------------
-   10. PANEL ADMIN — visibilidad
+   9. EDITOR DE ASIGNACIÓN
+   ------------------------------------------------------------ */
+
+function renderEditorAsignacion() {
+  if (!editorTbody) return;
+
+  editorTbody.innerHTML = '';
+
+  DIAS.forEach(dia => {
+    const tr = document.createElement('tr');
+
+    const th = document.createElement('th');
+    th.className = 'col-dia';
+    th.scope = 'row';
+    th.textContent = dia;
+    tr.appendChild(th);
+
+    for (let i = 0; i < 8; i++) {
+      const td = document.createElement('td');
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.value = ASIGNACION[dia][i] || '';
+      input.dataset.dia = dia;
+      input.dataset.idx = i;
+      input.setAttribute('list', 'personas-datalist');
+      input.spellcheck = false;
+      input.autocomplete = 'off';
+
+      const pintar = () => {
+        input.classList.remove('input-x', 'input-combo');
+        const v = input.value.trim();
+        if (v === 'X' || v === '') input.classList.add('input-x');
+        else if (v.includes('/')) input.classList.add('input-combo');
+      };
+      pintar();
+      input.addEventListener('input', pintar);
+
+      td.appendChild(input);
+      tr.appendChild(td);
+    }
+
+    editorTbody.appendChild(tr);
+  });
+}
+
+async function guardarAsignacion() {
+  if (!btnGuardarAsig || !editorEstado) return;
+
+  const inputs = editorTbody.querySelectorAll('input');
+  const nueva = { LUNES: [], MARTES: [], MIERCOLES: [], JUEVES: [], VIERNES: [] };
+
+  let valido = true;
+  inputs.forEach(inp => {
+    const dia = inp.dataset.dia;
+    const idx = Number(inp.dataset.idx);
+    const v = inp.value.trim();
+    if (!v) valido = false;
+    nueva[dia][idx] = v || 'X';
+  });
+
+  if (!valido) {
+    editorEstado.textContent = 'Hay celdas vacías. Completalas con un nombre o "X".';
+    editorEstado.className = 'admin-estado error';
+    return;
+  }
+
+  const db = obtenerDb();
+  if (!db) {
+    editorEstado.textContent = 'No se pudo conectar con el servidor.';
+    editorEstado.className = 'admin-estado error';
+    return;
+  }
+
+  editorEstado.textContent = 'Guardando cambios...';
+  editorEstado.className = 'admin-estado';
+  btnGuardarAsig.disabled = true;
+
+  try {
+    const batch = db.batch();
+    DIAS.forEach(dia => {
+      const ref = db.collection('dias').doc(dia);
+      batch.set(ref, { tareas: nueva[dia] });
+    });
+    await batch.commit();
+
+    // Actualizar el estado local
+    DIAS.forEach(dia => { ASIGNACION[dia] = nueva[dia]; });
+    recalcularUsuarios();
+
+    // Volver a renderizar la tabla con los datos nuevos
+    const sesion = leerSesion();
+    renderTabla(sesion ? sesion.usuario : null);
+    renderHoy(sesion ? sesion.usuario : null);
+
+    editorEstado.textContent = 'Cambios guardados correctamente.';
+    editorEstado.className = 'admin-estado ok';
+
+    // Sincronizar los inputs (por si se normalizó algún valor)
+    renderEditorAsignacion();
+
+  } catch (e) {
+    console.error('Error al guardar asignación:', e);
+    editorEstado.textContent = 'Error: ' + (e.message || e);
+    editorEstado.className = 'admin-estado error';
+  } finally {
+    btnGuardarAsig.disabled = false;
+  }
+}
+
+/* ------------------------------------------------------------
+   10. PESTAÑA PANEL ADMIN
    ------------------------------------------------------------ */
 
 function actualizarTabAdmin(usuario) {
@@ -372,7 +437,6 @@ function actualizarTabAdmin(usuario) {
   if (mostrar) {
     btnAdmin.classList.remove('hidden');
     btnAdmin.disabled = false;
-    renderEditorAdmin();
   } else {
     if (btnAdmin.classList.contains('active')) activarTab('inicio');
     btnAdmin.classList.add('hidden');
@@ -383,117 +447,7 @@ function actualizarTabAdmin(usuario) {
 }
 
 /* ------------------------------------------------------------
-   11. EDITOR DE ASIGNACIONES
-   ------------------------------------------------------------ */
-
-function renderEditorAdmin() {
-  if (!adminEditor) return;
-
-  let html = '<table class="editor-tabla"><thead><tr><th>DÍA</th>';
-  for (let i = 1; i <= 8; i++) html += `<th>T${i}</th>`;
-  html += '</tr></thead><tbody>';
-
-  for (const dia of DIAS) {
-    const fila = asignacionActual[dia] || ASIGNACION_DEFAULT[dia];
-    html += `<tr><th scope="row">${dia}</th>`;
-
-    for (let i = 0; i < 8; i++) {
-      const valor = fila[i] != null ? String(fila[i]) : 'X';
-      const claseX = esCeldaVacia(valor) ? 'celda-x' : '';
-      const escape = valor.replace(/"/g, '&quot;');
-      html += `<td>
-        <input type="text"
-               list="usuarios-datalist"
-               value="${escape}"
-               data-dia="${dia}"
-               data-idx="${i}"
-               class="${claseX}"
-               spellcheck="false"
-               autocomplete="off">
-      </td>`;
-    }
-    html += '</tr>';
-  }
-  html += '</tbody></table>';
-
-  adminEditor.innerHTML = html;
-
-  // Marcar visualmente las celdas X y actualizar la clase al escribir
-  adminEditor.querySelectorAll('input[data-dia]').forEach(inp => {
-    inp.addEventListener('input', () => {
-      const v = inp.value.trim();
-      inp.classList.toggle('celda-x', esCeldaVacia(v));
-    });
-  });
-}
-
-/** Recolecta los valores del editor y devuelve un objeto { DIA: [8 valores] }. */
-function recolectarEditor() {
-  const inputs = adminEditor.querySelectorAll('input[data-dia]');
-  const nueva = clonarAsignacion(asignacionActual);
-
-  inputs.forEach(inp => {
-    const dia = inp.dataset.dia;
-    const idx = parseInt(inp.dataset.idx, 10);
-    let valor = inp.value.trim();
-    if (!valor || valor.toUpperCase() === 'X') valor = 'X';
-    if (nueva[dia]) nueva[dia][idx] = valor;
-  });
-
-  return nueva;
-}
-
-async function guardarCambiosEditor() {
-  if (editorEstado) {
-    editorEstado.textContent = 'Guardando cambios...';
-    editorEstado.className = 'admin-estado';
-  }
-
-  const nueva = recolectarEditor();
-
-  try {
-    await guardarAsignaciones(nueva);
-    asignacionActual = nueva;
-    USUARIOS = calcularUsuarios();
-
-    // Re-renderizar la tabla y "hoy" con los datos nuevos
-    const sesion = leerSesion();
-    if (sesion) {
-      renderTabla(sesion.usuario);
-      renderHoy(sesion.usuario);
-    }
-
-    if (editorEstado) {
-      editorEstado.textContent = 'Cambios guardados correctamente.';
-      editorEstado.className = 'admin-estado ok';
-      setTimeout(() => {
-        editorEstado.textContent = '';
-        editorEstado.className = 'admin-estado';
-      }, 4000);
-    }
-  } catch (e) {
-    console.error('Error guardando asignaciones:', e);
-    if (editorEstado) {
-      editorEstado.textContent = 'Error: ' + (e.message || e);
-      editorEstado.className = 'admin-estado error';
-    }
-  }
-}
-
-function revertirEditor() {
-  renderEditorAdmin();
-  if (editorEstado) {
-    editorEstado.textContent = 'Cambios locales descartados.';
-    editorEstado.className = 'admin-estado';
-    setTimeout(() => {
-      editorEstado.textContent = '';
-      editorEstado.className = 'admin-estado';
-    }, 3000);
-  }
-}
-
-/* ------------------------------------------------------------
-   12. TOASTS
+   11. TOASTS
    ------------------------------------------------------------ */
 
 function mostrarToast(titulo, cuerpo, duracion = 8000) {
@@ -525,7 +479,7 @@ function mostrarToast(titulo, cuerpo, duracion = 8000) {
 }
 
 /* ------------------------------------------------------------
-   13. AUDIO
+   12. AUDIO
    ------------------------------------------------------------ */
 
 let _audioPendiente = null;
@@ -563,7 +517,7 @@ function desbloquearAudio() {
 }
 
 /* ------------------------------------------------------------
-   14. PERMISO DE NOTIFICACIONES
+   13. PERMISO DE NOTIFICACIONES
    ------------------------------------------------------------ */
 
 function permisoConcedido() {
@@ -577,8 +531,14 @@ async function pedirPermisoNotificaciones() {
   try {
     const resultado = await Notification.requestPermission();
     return resultado === 'granted';
-  } catch (e) { return false; }
+  } catch (e) {
+    return false;
+  }
 }
+
+/* ------------------------------------------------------------
+   14. SERVICE WORKER READY
+   ------------------------------------------------------------ */
 
 async function esperarServiceWorker(timeoutMs = 6000) {
   if (!('serviceWorker' in navigator)) return null;
@@ -606,7 +566,7 @@ async function revisionpendiente() {
   if (!sesion) return;
 
   const db = obtenerDb();
-  if (!db) { console.warn('revisionpendiente: sin acceso a Firebase.'); return; }
+  if (!db) return;
 
   try {
     const ultimaSnap = await db.collection(COLECCION).doc(DOC_ULTIMA).get();
@@ -686,7 +646,7 @@ async function solicitarRevision() {
     const revActual = ultimaSnap.exists ? (ultimaSnap.data().revision || 0) : 0;
     const nuevaRev  = Number(revActual) + 1;
 
-    const nuevoDoc = {
+    await db.collection(COLECCION).add({
       fecha: firebase.firestore.FieldValue.serverTimestamp(),
       revision: nuevaRev,
       Mia: false,
@@ -694,9 +654,8 @@ async function solicitarRevision() {
       Ayelen: false,
       Lucia: false,
       Alejandro: false
-    };
+    });
 
-    await db.collection(COLECCION).add(nuevoDoc);
     await db.collection(COLECCION).doc(DOC_ULTIMA).set(
       { revision: nuevaRev },
       { merge: true }
@@ -709,7 +668,6 @@ async function solicitarRevision() {
 
     alert(`Se solicito una revision exitosamente, el numero de revision es: ${nuevaRev}`);
     alert('En breve se le reiniciara la aplicacion...');
-
     setTimeout(() => location.reload(), 5000);
   } catch (e) {
     console.error('Error al solicitar revisión:', e);
@@ -739,7 +697,6 @@ function ocultarError() {
 
 function iniciarSesion(usuario) {
   userChip.textContent = usuario;
-
   renderTabla(usuario);
   renderHoy(usuario);
 
@@ -786,7 +743,7 @@ function manejarLogin(evento) {
 
   const usuario = buscarUsuario(valor);
   if (!usuario) {
-    mostrarError(`No encontramos a "${valor}". Probá con otro nombre.`);
+    mostrarError(`No encontramos a "${valor}". Probá con Mía, Pedro, Ayelen o Lucía.`);
     return;
   }
 
@@ -796,7 +753,7 @@ function manejarLogin(evento) {
 }
 
 /* ------------------------------------------------------------
-   18. NOTIFICACIONES DIARIAS
+   18. NOTIFICACIONES DIARIAS (tareas)
    ------------------------------------------------------------ */
 
 let reintentarDesde = 0;
@@ -849,10 +806,7 @@ function revisarNotificaciones() {
   if (Date.now() < reintentarDesde) return;
 
   enviarNotificacion(clave).then(ok => {
-    if (!ok) {
-      reintentarDesde = Date.now() + REINTENTO_MS;
-      console.info('Reintentando notificación en 2 minutos...');
-    }
+    if (!ok) reintentarDesde = Date.now() + REINTENTO_MS;
   });
 }
 
@@ -881,16 +835,19 @@ function registrarServiceWorker() {
    20. INICIALIZACIÓN
    ------------------------------------------------------------ */
 
-function init() {
+async function init() {
+  // [NUEVO] Primero intentar cargar la asignación real desde Firestore
+  await cargarAsignacionDesdeFirestore();
+
   renderTabla(null);
   renderHoy(null);
+  renderEditorAsignacion();
 
   formLogin.addEventListener('submit', manejarLogin);
   btnLogout.addEventListener('click', cerrarSesion);
 
-  if (btnAdminRev)   btnAdminRev.addEventListener('click', solicitarRevision);
-  if (btnGuardarEd)  btnGuardarEd.addEventListener('click', guardarCambiosEditor);
-  if (btnRevertirEd) btnRevertirEd.addEventListener('click', revertirEditor);
+  if (btnAdminRev) btnAdminRev.addEventListener('click', solicitarRevision);
+  if (btnGuardarAsig) btnGuardarAsig.addEventListener('click', guardarAsignacion);
 
   inputUsuario.addEventListener('input', () => {
     if (errorLogin.classList.contains('show')) ocultarError();
@@ -920,19 +877,7 @@ function init() {
     document.fonts.ready.then(() => posicionarIndicador(false));
   }
 
-  /* ---- Cargar asignaciones desde Firestore en background ---- */
-  cargarAsignaciones().then(() => {
-    // Cuando termina la carga (con éxito o no), re-renderizamos con los
-    // datos definitivos y refrescamos el editor si Pedro está logueado.
-    const sesion = leerSesion();
-    if (sesion) {
-      renderTabla(sesion.usuario);
-      renderHoy(sesion.usuario);
-      if (esAdmin(sesion.usuario)) renderEditorAdmin();
-    }
-  });
-
-  /* ---- Auto-login con los datos disponibles (defaults) ---- */
+  /* ---- AUTO-LOGIN ---- */
   const sesion = leerSesion();
   if (sesion) {
     iniciarSesion(sesion.usuario);

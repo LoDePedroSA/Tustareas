@@ -764,3 +764,107 @@ td.celda-vacia { color: #c9cbdb; }
   .toast-container { top: 10px; right: 10px; left: 10px; }
   .toast { max-width: 100%; min-width: 0; }
 }
+
+/* ============================================================
+   Editor de asignación (panel admin)
+   ============================================================ */
+
+.editor-wrap {
+  overflow-x: auto;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #fff;
+  margin-bottom: 14px;
+}
+
+.editor-tabla {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  font-size: .85rem;
+}
+
+.editor-tabla thead th {
+  padding: 10px 8px;
+  font-size: .68rem;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: #4a4d6b;
+  background: #f8f9ff;
+  border-bottom: 1px solid var(--line);
+  text-align: center;
+}
+
+.editor-tabla thead th.col-dia {
+  text-align: left;
+  padding-left: 14px;
+  min-width: 100px;
+}
+
+.editor-tabla tbody th.col-dia {
+  padding: 6px 14px;
+  font-size: .72rem;
+  font-weight: 600;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: #4a4d6b;
+  background: #f8f9ff;
+  border-bottom: 1px solid #f1f2f9;
+  white-space: nowrap;
+  position: sticky;
+  left: 0;
+  z-index: 1;
+}
+
+.editor-tabla tbody td {
+  padding: 4px;
+  border-bottom: 1px solid #f1f2f9;
+  border-left: 1px solid #f1f2f9;
+}
+
+.editor-tabla tbody tr:last-child td,
+.editor-tabla tbody tr:last-child th { border-bottom: 0; }
+
+.editor-tabla input {
+  width: 100%;
+  min-width: 80px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: #fbfbfe;
+  font: inherit;
+  font-size: .82rem;
+  color: var(--ink);
+  text-align: center;
+  transition: border-color .2s ease, background .2s ease, box-shadow .2s ease;
+}
+
+.editor-tabla input:focus {
+  outline: none;
+  border-color: var(--primary);
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(91,91,214,.14);
+}
+
+.editor-tabla input.input-x {
+  color: #c9cbdb;
+}
+
+.editor-tabla input.input-combo {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.editor-legend {
+  margin: 0 0 18px;
+  font-size: .74rem;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+#btn-guardar-asignacion {
+  width: auto;
+  margin-top: 0;
+  padding: 13px 26px;
+}

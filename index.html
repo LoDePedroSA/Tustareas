@@ -95,13 +95,12 @@
       </div>
     </section>
 
-        <!-- ================= PANEL ADMIN ================= -->
+    <!-- ================= PANEL ADMIN ================= -->
     <section class="panel" id="panel-panel-admin">
       <div class="card admin-card">
         <h2 class="card-title">Panel admin</h2>
-        <p class="card-sub">Herramientas de administración de revisiones y tareas</p>
+        <p class="card-sub">Herramientas de administración de revisiones</p>
 
-        <!-- Bloque 1: Solicitar revisión -->
         <div class="admin-bloque">
           <h3 class="admin-sub">Solicitar nueva revisión</h3>
           <p class="admin-desc">
@@ -111,45 +110,55 @@
           <button class="btn btn-primary" id="btn-solicitar-revision" type="button">
             Solicitar revisión
           </button>
-          <p class="admin-estado" id="admin-estado"></p>
         </div>
-
-        <!-- Bloque 2: Editor de asignaciones -->
         <div class="admin-bloque">
-          <h3 class="admin-sub">Editar asignación de tareas</h3>
-          <p class="admin-desc">
-            Modificá quién tiene cada tarea en cada día. Podés escribir varios
-            usuarios separados por "/" (ej: "Mía/Pedro") o una "X" para marcar
-            el día como sin tarea asignada.
-          </p>
+  <h3 class="admin-sub">Editar asignación de tareas</h3>
+  <p class="admin-desc">
+    Modificá quién hace cada tarea cada día. Usá <strong>X</strong> para indicar
+    que nadie la hace, y barras (/) para tareas compartidas (ej: Mía/Pedro).
+  </p>
 
-          <div id="admin-editor" class="editor-wrap">
-            <p class="editor-cargando">Cargando asignaciones...</p>
-          </div>
+  <div class="editor-wrap">
+    <table class="editor-tabla">
+      <thead>
+        <tr>
+          <th class="col-dia">DÍA</th>
+          <th>T1</th><th>T2</th><th>T3</th><th>T4</th>
+          <th>T5</th><th>T6</th><th>T7</th><th>T8</th>
+        </tr>
+      </thead>
+      <tbody id="editor-tbody"></tbody>
+    </table>
+  </div>
 
-          <button class="btn btn-primary" id="btn-guardar-editor" type="button">
-            Guardar cambios
-          </button>
-          <button class="btn btn-ghost" id="btn-revertir-editor" type="button">
-            Revertir cambios
-          </button>
-          <p class="admin-estado" id="editor-estado"></p>
-        </div>
+  <datalist id="personas-datalist">
+    <option value="X"></option>
+    <option value="Mía"></option>
+    <option value="Pedro"></option>
+    <option value="Ayelen"></option>
+    <option value="Lucía"></option>
+    <option value="Mía/Pedro"></option>
+    <option value="Pedro/Mía"></option>
+  </datalist>
 
+  <div class="editor-legend">
+    T1: Secar vidrios · T2: Secar lo lavado · T3: Barrer en el medio dia ·
+    T4: Lavar en el Medio Día · T5: Limpiar mesa · T6: Limpiar mesa ·
+    T7: Lavar vasos · T8: Barrer noche
+  </div>
+
+  <button class="btn btn-primary" id="btn-guardar-asignacion" type="button">
+    Guardar cambios en la base de datos
+  </button>
+
+  <p class="admin-estado" id="editor-estado"></p>
+</div>
+
+        <p class="admin-estado" id="admin-estado"></p>
       </div>
     </section>
-
-    <!-- Datalist para sugerencias del editor -->
-    <datalist id="usuarios-datalist">
-      <option value="X"></option>
-      <option value="Mía"></option>
-      <option value="Pedro"></option>
-      <option value="Ayelen"></option>
-      <option value="Lucía"></option>
-      <option value="Mía/Pedro"></option>
-      <option value="Pedro/Mía"></option>
-    </datalist>
-
+  </main>
+  
   <!-- Contenedor de notificaciones internas -->
   <div class="toast-container" id="toast-container" aria-live="polite"></div>
 
