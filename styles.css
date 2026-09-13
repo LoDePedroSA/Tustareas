@@ -231,9 +231,7 @@ main { width: min(100%, 960px); }
   cursor: not-allowed;
 }
 
-.tab-btn.hidden {
-  display: none;
-}
+.tab-btn.hidden { display: none; }
 
 .panel { display: none; }
 
@@ -555,14 +553,6 @@ td.celda-vacia { color: #c9cbdb; }
   box-shadow: 0 10px 30px -24px rgba(35, 25, 90, .5);
 }
 
-.editor-cargando {
-  margin: 0;
-  padding: 22px;
-  text-align: center;
-  color: var(--muted);
-  font-size: .9rem;
-}
-
 .editor-tabla {
   width: 100%;
   min-width: 760px;
@@ -862,37 +852,426 @@ td.celda-vacia { color: #c9cbdb; }
   outline-offset: 2px;
 }
 
-@media (max-width: 620px) {
-  body { padding: 26px 12px 48px; }
-  .card { padding: 22px 18px; }
-  .tabs { padding: 5px; gap: 4px; margin-bottom: 24px; }
-  .tab-btn {
-    padding: 11px 16px;
-    font-size: .85rem;
-    min-height: 42px;
+/* ============================================================
+   MOBILE — responsive compacto
+   Desktop styles above remain unchanged.
+   ============================================================ */
+
+@media (max-width: 720px) {
+  html {
+    min-height: 100%;
+    overflow-x: hidden;
   }
-  .inicio-top { justify-content: center; }
-  .hoy { padding: 18px; }
-  .editor-tabla { min-width: 720px; }
-  .admin-bloque .btn-ghost { margin-left: 0; margin-top: 8px; display: block; width: 100%; }
-}
 
-@media (max-width: 480px) {
-  .modal { padding: 22px 20px; }
-  .modal-actions { justify-content: stretch; }
-  .modal-actions .btn { flex: 1; }
-  .inicio-acciones { flex-direction: column; }
-  .inicio-acciones .btn { width: 100%; }
-}
+  body {
+    width: 100%;
+    min-height: 100dvh;
+    padding: 10px 8px 24px;
+    overflow-x: hidden;
+    /* CLAVE: stretch para que los hijos ocupen el ancho del viewport,
+       no el de su propio contenido. */
+    align-items: stretch;
+  }
 
-@media (max-width: 420px) {
-  .tabs { padding: 4px; gap: 3px; }
+  body.modo-instalar-activo {
+    min-height: 100dvh;
+    padding: 0;
+    align-items: center;
+  }
+
+  /* CLAVE: sin esto, #app-contenido toma el ancho de su contenido
+     (la tabla de 560px) y desborda el viewport por la izquierda. */
+  #app-contenido {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  main {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .panel {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .bg-decor { width: 100%; max-width: 100%; }
+
+  .app-header {
+    width: 100%;
+    margin-bottom: 12px;
+  }
+
+  .logo { font-size: 1.55rem; }
+
+  .tagline {
+    margin-top: 2px;
+    font-size: .70rem;
+    letter-spacing: .03em;
+    line-height: 1.3;
+  }
+
+  /* Tabs: si no entran, hacen scroll horizontal en vez de aplastarse */
+  .tabs {
+    position: relative;
+    width: 100%;
+    max-width: 100%;
+    gap: 4px;
+    margin: 0 0 12px;
+    padding: 3px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+
+  .tab-indicator { display: none !important; }
+
   .tab-btn {
-    padding: 10px 10px;
+    flex: 0 0 auto;
+    padding: 7px 14px;
+    font-size: .74rem;
+    min-height: 30px;
+    white-space: nowrap;
+  }
+
+  .card {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    padding: 14px 12px;
+    border-radius: 14px;
+  }
+
+  .card-title {
+    font-size: 1rem;
+    margin-bottom: 2px;
+  }
+
+  .card-sub {
+    font-size: .74rem;
+    margin-bottom: 12px;
+    line-height: 1.4;
+  }
+
+  .login-card { max-width: 100%; }
+
+  .field-label {
+    font-size: .62rem;
+    margin-bottom: 5px;
+    letter-spacing: .07em;
+  }
+
+  input[type="text"] {
+    width: 100%;
+    max-width: 100%;
+    padding: 10px 12px;
+    font-size: .88rem;
+    border-radius: 10px;
+  }
+
+  .error {
+    font-size: .74rem;
+    margin-top: 6px;
+  }
+
+  .btn {
+    max-width: 100%;
+    padding: 10px 16px;
+    font-size: .82rem;
+    border-radius: 11px;
+  }
+
+  .btn-primary { margin-top: 12px; }
+
+  .inicio-top {
+    width: 100%;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  .user-chip {
+    min-width: 0;
+    max-width: 100%;
+    padding: 5px 10px;
+    font-size: .72rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .btn-ghost {
+    flex-shrink: 0;
+    padding: 6px 10px;
+    font-size: .72rem;
+    border-radius: 9px;
+  }
+
+  /* Scroll horizontal DENTRO del contenedor, nunca en la página */
+  .table-wrap,
+  .editor-wrap {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+  }
+
+  /* width: 100% (en vez de max-content) es más predecible dentro
+     de un overflow-x: auto y evita que la tabla "escape" del wrapper */
+  table {
+    width: 100%;
+    min-width: 560px;
+    font-size: .72rem;
+  }
+
+  thead th {
+    padding: 7px 5px;
+    font-size: .54rem;
+    letter-spacing: .03em;
+  }
+
+  thead th.col-dia,
+  tbody th.col-dia {
+    padding-left: 8px;
+    min-width: 70px;
+  }
+
+  tbody th.col-dia {
+    font-size: .58rem;
+    letter-spacing: .04em;
+  }
+
+  tbody td { padding: 6px 4px; }
+
+  .hoy {
+    width: 100%;
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: 11px;
+  }
+
+  .hoy h3 {
+    font-size: .80rem;
+    margin-bottom: 6px;
+  }
+
+  .hoy ul {
     font-size: .78rem;
-    min-height: 40px;
-    letter-spacing: -0.01em;
+    line-height: 1.45;
+    padding-left: 16px;
   }
-  .toast-container { top: 10px; right: 10px; left: 10px; }
-  .toast { max-width: 100%; min-width: 0; }
+
+  .hoy p.vacio { font-size: .78rem; }
+
+  .inicio-acciones {
+    width: 100%;
+    gap: 6px;
+    margin-top: 10px;
+  }
+
+  .inicio-acciones .btn {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
+  .btn-secondary {
+    padding: 9px 12px;
+    font-size: .76rem;
+    border-radius: 10px;
+  }
+
+  .admin-card {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .admin-bloque {
+    width: 100%;
+    padding: 12px 10px;
+    border-radius: 11px;
+    margin-top: 8px;
+  }
+
+  .admin-sub { font-size: .84rem; }
+
+  .admin-desc {
+    font-size: .74rem;
+    margin-bottom: 10px;
+    line-height: 1.4;
+  }
+
+  .admin-bloque .btn-primary,
+  #btn-guardar-asignacion {
+    width: 100%;
+    padding: 9px 14px;
+    font-size: .78rem;
+  }
+
+  .editor-wrap {
+    border-radius: 9px;
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  .editor-tabla {
+    width: 100%;
+    min-width: 560px;
+    font-size: .68rem;
+  }
+
+  .editor-tabla thead th {
+    padding: 5px 3px;
+    font-size: .52rem;
+    letter-spacing: .02em;
+  }
+
+  .editor-tabla thead th.col-dia {
+    padding-left: 6px;
+    min-width: 64px;
+  }
+
+  .editor-tabla tbody th.col-dia {
+    padding: 3px 6px;
+    font-size: .56rem;
+  }
+
+  .editor-tabla tbody td { padding: 2px; }
+
+  .editor-tabla select.editor-select {
+    min-width: 62px;
+    max-width: 100%;
+    padding: 4px 16px 4px 3px;
+    font-size: .66rem;
+    border-radius: 5px;
+    background-position:
+      calc(100% - 9px) 50%,
+      calc(100% - 5px) 50%;
+    background-size: 4px 4px, 4px 4px;
+  }
+
+  .editor-legend {
+    font-size: .58rem;
+    margin-bottom: 10px;
+    line-height: 1.4;
+  }
+
+  .admin-estado {
+    font-size: .72rem;
+    margin-top: 10px;
+  }
+
+  .modal-overlay {
+    min-height: 100dvh;
+    padding: 12px;
+    overflow-y: auto;
+    align-items: center;
+  }
+
+  .modal {
+    width: min(100%, 420px);
+    max-height: calc(100dvh - 24px);
+    overflow-y: auto;
+    padding: 16px 14px;
+    border-radius: 14px;
+  }
+
+  .modal-title { font-size: .92rem; }
+
+  .modal-desc {
+    font-size: .76rem;
+    margin-bottom: 12px;
+  }
+
+  .modal input[type="time"] {
+    width: 100%;
+    padding: 10px 12px;
+    font-size: .9rem;
+    border-radius: 9px;
+  }
+
+  .modal-actions {
+    margin-top: 14px;
+    gap: 6px;
+  }
+
+  .modal-actions .btn {
+    padding: 9px 14px;
+    font-size: .78rem;
+  }
+
+  .toast-container {
+    top: 8px;
+    right: 8px;
+    left: 8px;
+    width: auto;
+    max-width: none;
+    gap: 6px;
+  }
+
+  .toast {
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    padding: 10px 12px;
+    border-radius: 11px;
+  }
+
+  .toast-title { font-size: .82rem; }
+  .toast-body  { font-size: .74rem; }
+
+  .modo-instalar-card { padding: 28px 20px; }
+
+  .modo-instalar-logo {
+    font-size: clamp(1.7rem, 7vw, 2.2rem);
+  }
+
+  .modo-instalar-desc {
+    font-size: .84rem;
+    margin-bottom: 20px;
+  }
+}
+
+@media (max-width: 400px) {
+  body { padding: 8px 6px 18px; }
+
+  .card { padding: 12px 10px; }
+
+  .logo { font-size: 1.4rem; }
+
+  .tabs { gap: 3px; padding: 3px; }
+
+  .tab-btn {
+    padding: 6px 10px;
+    font-size: .68rem;
+    min-height: 28px;
+  }
+
+  table { min-width: 520px; font-size: .68rem; }
+  tbody td { padding: 5px 3px; }
+  thead th { padding: 6px 3px; font-size: .50rem; }
+
+  .editor-tabla { min-width: 520px; }
+  .editor-tabla select.editor-select { min-width: 56px; }
+
+  .inicio-acciones .btn {
+    width: 100%;
+    flex-basis: 100%;
+  }
+
+  .modal-overlay { padding: 10px; }
+  .modal {
+    max-height: calc(100dvh - 20px);
+    padding: 14px 12px;
+  }
 }

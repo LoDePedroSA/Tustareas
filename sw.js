@@ -1,4 +1,4 @@
-const CACHE = 'tustareas-v4';
+const CACHE = 'tustareas-v5';
 
 const ARCHIVOS = [
   './',

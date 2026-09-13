@@ -184,14 +184,21 @@ function claveHora(usuario) {
 }
 
 function obtenerHoraNotificacion(usuario) {
-  if (!usuario) {
-    const [h, m] = HORA_NOTIF_DEFAULT.split(':').map(Number);
-    return { hora: h, minuto: m, texto: HORA_NOTIF_DEFAULT };
+  let texto = HORA_NOTIF_DEFAULT;
+  if (usuario) {
+    try {
+      const guardada = localStorage.getItem(claveHora(usuario));
+      if (guardada && /^\d{1,2}:\d{2}$/.test(guardada)) texto = guardada;
+    } catch (e) {}
   }
-  const guardada = localStorage.getItem(claveHora(usuario));
-  const valor = guardada || HORA_NOTIF_DEFAULT;
-  const [h, m] = valor.split(':').map(Number);
-  return { hora: h, minuto: m, texto: valor };
+  const partes = texto.split(':');
+  const h = Number(partes[0]);
+  const m = Number(partes[1]);
+  if (isNaN(h) || isNaN(m) || h < 0 || h > 23 || m < 0 || m > 59) {
+    return { hora: 20, minuto: 0, texto: HORA_NOTIF_DEFAULT };
+  }
+  const normalizado = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  return { hora: h, minuto: m, texto: normalizado };
 }
 
 function guardarHoraNotificacion(usuario, textoHHMM) {
@@ -263,15 +270,11 @@ function activarModoInstalar() {
 
 function actualizarBotonInstalar() {
   if (!btnInstalar || !instalarEstado) return;
-  if (eventoInstalacion) {
-    btnInstalar.disabled = false;
-    btnInstalar.textContent = 'Instalar app';
-    instalarEstado.textContent = '';
-  } else {
-    btnInstalar.disabled = false;
-    btnInstalar.textContent = 'Instalar app';
-    instalarEstado.textContent = 'Si no aparece el aviso, tocá el botón nuevamente o usá el menú del navegador.';
-  }
+  btnInstalar.disabled = false;
+  btnInstalar.textContent = 'Instalar app';
+  instalarEstado.textContent = eventoInstalacion
+    ? ''
+    : 'Si no aparece el aviso, tocá el botón otra vez o usá el menú del navegador.';
 }
 
 async function intentarInstalar() {
@@ -293,7 +296,6 @@ async function intentarInstalar() {
     }
     return;
   }
-
   instalarEstado.textContent = 'Tu navegador no ofreció el aviso todavía. Esperá un momento y volvé a intentar.';
 }
 
@@ -308,8 +310,15 @@ window.addEventListener('appinstalled', () => {
   if (instalarEstado) instalarEstado.textContent = 'App instalada correctamente.';
 });
 
+function esMobile() {
+  return window.matchMedia('(max-width: 640px)').matches;
+}
+
 function posicionarIndicador(animar = true) {
   if (!tabsEl || !indicador) return;
+  if (esMobile()) { indicador.style.display = 'none'; return; }
+  indicador.style.display = '';
+
   const activo = tabsEl.querySelector('.tab-btn.active');
   if (!activo || activo.offsetParent === null) return;
 
@@ -705,14 +714,23 @@ function guardarHoraSeleccionada() {
   if (!sesion) { cerrarModalHora(); return; }
 
   const valor = (modalHoraInput.value || '').trim();
-  if (!/^\d{2}:\d{2}$/.test(valor)) {
+  if (!/^\d{1,2}:\d{2}$/.test(valor)) {
     alert('Elegí una hora válida.');
     return;
   }
 
-  guardarHoraNotificacion(sesion.usuario, valor);
+  const partes = valor.split(':');
+  const hh = String(Number(partes[0])).padStart(2, '0');
+  const mm = String(Number(partes[1])).padStart(2, '0');
+  const normalizado = `${hh}:${mm}`;
+
+  guardarHoraNotificacion(sesion.usuario, normalizado);
   cerrarModalHora();
-  mostrarToast('TusTareas', `Listo. Vas a recibir tu recordatorio diario a las ${valor}.`);
+
+  try { localStorage.removeItem(STORAGE_NOTIF); } catch (e) {}
+  reintentarDesde = 0;
+
+  mostrarToast('TusTareas', `Listo. Vas a recibir tu recordatorio diario a las ${normalizado}.`);
 
   revisarNotificaciones();
 }
