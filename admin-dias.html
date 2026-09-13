@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inicializar días — TusTareas</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 48px 20px;
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    background: #f4f5fb; color: #17182b;
+    display: flex; justify-content: center;
+  }
+  .wrap { width: min(100%, 640px); }
+  h1 { margin: 0 0 8px; font-size: 1.8rem; letter-spacing: -0.02em; }
+  p  { margin: 0 0 22px; color: #71748a; line-height: 1.5; }
+  button {
+    padding: 14px 28px; border: 0; border-radius: 14px; cursor: pointer;
+    background: linear-gradient(120deg, #5b5bd6, #8b5cf6);
+    color: #fff; font-size: 1rem; font-weight: 600;
+    box-shadow: 0 16px 28px -16px rgba(91,91,214,1);
+    transition: transform .2s ease, box-shadow .25s ease;
+  }
+  button:hover:not(:disabled) { transform: translateY(-2px); }
+  button:disabled { opacity: .55; cursor: wait; }
+  pre {
+    margin-top: 24px; padding: 18px;
+    background: #17182b; color: #d7d9ff;
+    border-radius: 12px; font-size: .82rem; line-height: 1.5;
+    white-space: pre-wrap; word-break: break-word;
+    max-height: 340px; overflow-y: auto;
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Inicializar días en Firestore</h1>
+    <p>
+      Este botón crea (o sobrescribe) la colección <strong>dias</strong> en Firestore
+      con las 5 filas que ya tenías cargadas en el código. Solo se ejecuta una vez.
+    </p>
+    <button id="btn">Crear estructura en Firestore</button>
+    <pre id="log">Listo para ejecutar.</pre>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyC8jSaP8e1UvLDn2sDdIyo2Z9o_KNhSEro",
+      authDomain: "tuesa-oficial.firebaseapp.com",
+      projectId: "tuesa-oficial",
+      storageBucket: "tuesa-oficial.firebasestorage.app",
+      messagingSenderId: "447951557213",
+      appId: "1:447951557213:web:293e062ae3fe474c1cb3b4"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    /* Asignaciones por defecto (las que ya tenías en el código) */
+    const ASIGNACION = {
+      LUNES:     ['Mía',       'Pedro',     'Pedro', 'Mía',   'Ayelen', 'Ayelen', 'Mía',   'Pedro'],
+      MARTES:    ['Lucía',     'Lucía',     'Lucía', 'Lucía', 'Ayelen', 'Pedro',  'Ayelen','Mía'],
+      MIERCOLES: ['Pedro',     'Mía',       'Mía',   'Pedro', 'Pedro',  'Mía',    'Ayelen','Pedro'],
+      JUEVES:    ['Pedro',     'Pedro',     'Pedro', 'Pedro', 'X',      'Mía',    'Pedro', 'Ayelen'],
+      VIERNES:   ['Mía/Pedro', 'Pedro/Mía', 'Mía',   'Pedro', 'X',      'X',      'X',     'X']
+    };
+
+    const btn = document.getElementById('btn');
+    const log = document.getElementById('log');
+
+    function escribir(msg) {
+      log.textContent += '\n' + msg;
+      log.scrollTop = log.scrollHeight;
+    }
+
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      log.textContent = 'Iniciando...';
+
+      try {
+        const batch = db.batch();
+
+        for (const [dia, tareas] of Object.entries(ASIGNACION)) {
+          const ref = db.collection('dias').doc(dia);
+          batch.set(ref, { tareas });
+          escribir(`Preparado: dias/${dia} → ${tareas.length} tareas`);
+        }
+
+        await batch.commit();
+        escribir('\nTodo listo. La colección "dias" quedó creada.');
+        escribir('Ya podés cerrar esta página y usar la app.');
+      } catch (e) {
+        console.error(e);
+        escribir('\nERROR: ' + (e.message || e));
+        escribir('Revisá las reglas de Firestore o la conexión.');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
